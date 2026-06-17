@@ -214,10 +214,6 @@ class EndpointTree(
             background = UIUtil.getPanelBackground()
             border = RoundedCornerBorder(fillColor = UIUtil.getPanelBackground(), arc = 8)
         }
-        val debugItem = menuItem(
-            ApiHelperBundle.message("toolwindow.action.debug.endpoint"),
-            AllIcons.Actions.Execute,
-        ) { debugSelectedEndpoint() }
         val navigateItem = menuItem(
             ApiHelperBundle.message("toolwindow.action.navigate.counterpart"),
             AllIcons.Actions.Forward,
@@ -226,8 +222,14 @@ class EndpointTree(
             ApiHelperBundle.message("toolwindow.action.copy.url"),
             AllIcons.Actions.Copy,
         ) { copySelectedUrl() }
-        menu.add(debugItem)
-        menu.addSeparator()
+        if (kind == EndpointKind.CONTROLLER) {
+            val debugItem = menuItem(
+                ApiHelperBundle.message("toolwindow.action.debug.endpoint"),
+                AllIcons.Actions.Execute,
+            ) { debugSelectedEndpoint() }
+            menu.add(debugItem)
+            menu.addSeparator()
+        }
         menu.add(navigateItem)
         menu.add(copyItem)
         return menu

@@ -11,13 +11,14 @@ import com.lizhuolun.apihelper.provider.RestIcons
  * Controller 方法旁的导航 gutter。
  *
  * 左键：跳转到对端 FeignClient / HttpExchange 方法（多目标弹选择 popup）
- * 右键：复制当前 Controller URL 到剪贴板
+ * 右键：调试当前接口或复制当前 Controller URL 到剪贴板
  */
 class ControllerToFeignLineMarker : EndpointNavigationLineMarker() {
 
     override val markerIcon = RestIcons.JUMP_CONTROLLER_TO_FEIGN
     override val titleKey = "linemarker.controller.to.feign.title"
     override val accessibleKey = "linemarker.controller.accessible"
+    override val debugPopupActionEnabled = true
 
     override fun isApplicable(method: PsiMethod): Boolean {
         val cls = method.containingClass ?: return false
@@ -32,6 +33,6 @@ class ControllerToFeignLineMarker : EndpointNavigationLineMarker() {
         BilateralMappingCacheService.of(project)
             .findClientTargets(method)
 
-    override fun resolveSelfUrl(project: Project, method: PsiMethod): String? =
-        BilateralMappingCacheService.of(project).resolveMapping(method)?.url
+    override fun resolveSelfMapping(project: Project, method: PsiMethod): HttpMappingInfo? =
+        BilateralMappingCacheService.of(project).resolveMapping(method)
 }

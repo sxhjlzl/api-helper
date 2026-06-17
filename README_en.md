@@ -34,8 +34,9 @@ In Spring projects, endpoint-related work is often scattered across Controllers,
 - Bidirectional gutter navigation between `@FeignClient` / `@HttpExchange` methods and `@RestController` methods
 - Copy resolved endpoint URLs from gutter actions
 - Browse Controller and Feign / HttpExchange endpoints in the ApiHelper tool window
-- Search, expand, collapse, debug endpoints, and copy URLs from the endpoint list
+- Search, expand, collapse, navigate to counterparts, and copy URLs from endpoint lists; Controller endpoints support context-menu debugging
 - Lightweight API debugger with Query, Path, Header, Cookie, and multiple Body modes
+- Automatically prefill Path, Query, Header, Cookie, and JSON Body drafts when opening the debugger from an endpoint
 - Automatic JSON response formatting
 - Spring context-path, servlet path, profile, and placeholder resolution
 - Java and Kotlin support via UAST
@@ -72,9 +73,11 @@ Install it in IDEA via `Settings` -> `Plugins` -> `Install Plugin from Disk...`.
 After opening a Spring Web, OpenFeign, or `@HttpExchange` project, ApiHelper scans endpoints asynchronously and warms its cache.
 
 - Click gutter arrows to navigate to counterpart endpoints.
-- Right-click gutter arrows to copy resolved URLs.
+- Right-click Controller gutter icons to debug endpoints or copy resolved URLs.
+- Feign / HttpExchange gutter icons support left-click navigation only.
 - Open the right-side `ApiHelper` tool window to browse endpoints or use the debugger.
-- Right-click a concrete endpoint row to debug, navigate to counterpart, or copy URL.
+- Right-click a Controller endpoint row to debug, navigate to counterpart, or copy URL.
+- Right-click a Feign / HttpExchange endpoint row to navigate to counterpart or copy URL.
 
 ## Settings
 
@@ -130,7 +133,7 @@ src/main/resources/
 
 ## Version
 
-Current version: `1.0.0`
+Current version: `1.0.1`
 
 ## Feedback And Support
 

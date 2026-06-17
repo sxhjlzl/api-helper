@@ -32,10 +32,11 @@ ApiHelper 支持 Spring MVC Controller、Spring Cloud OpenFeign 以及 Spring 6 
 ## 功能
 
 - `@FeignClient` / `@HttpExchange` 接口方法与 `@RestController` 方法双向 gutter 跳转
-- gutter 右键复制解析后的接口 URL
+- Controller gutter 右键调试接口或复制解析后的接口 URL
 - ApiHelper 工具窗口集中展示 Controller 与 Feign / HttpExchange 端点
-- 支持搜索、展开、收起、右键调试接口、右键复制 URL
+- 支持搜索、展开、收起、跳转对端、复制 URL；Controller 接口支持右键调试
 - 内置轻量 API 调试页，支持 Query、Path、Header、Cookie 和多种 Body 类型
+- 从接口进入调试页时自动预填 Path、Query、Header、Cookie 与 JSON Body 草稿
 - 支持 JSON 响应自动格式化
 - 自动解析 Spring 配置中的 context-path、servlet path、profile 与占位符
 - 基于 UAST 同时支持 Java 与 Kotlin
@@ -72,9 +73,11 @@ build/distributions/api-helper-<version>.zip
 打开带有 Spring Web、OpenFeign 或 `@HttpExchange` 注解的项目后，ApiHelper 会异步扫描端点并预热缓存。
 
 - 在编辑器 gutter 中点击箭头可跳转到对端接口。
-- 右键 gutter 可复制解析后的 URL。
+- Controller gutter 右键可调试接口或复制解析后的 URL。
+- Feign / HttpExchange gutter 仅支持左键跳转。
 - 打开右侧 `ApiHelper` 工具窗口，可浏览接口列表或切换到调试页。
-- 在接口列表中右键具体接口，可调试、跳转对端或复制 URL。
+- 在 Controller 接口列表中右键具体接口，可调试、跳转对端或复制 URL。
+- 在 Feign / HttpExchange 接口列表中右键具体接口，可跳转对端或复制 URL。
 
 ## 设置
 
@@ -130,7 +133,7 @@ src/main/resources/
 
 ## 版本
 
-当前版本：`1.0.0`
+当前版本：`1.0.1`
 
 ## 反馈与支持
 

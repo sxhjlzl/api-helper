@@ -2,6 +2,15 @@
 
 本文件记录 ApiHelper 插件的版本变更。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.0.1] - 2026-06-17
+
+### 变更
+
+- Feign / HttpExchange 接口列表右键菜单不再提供调试入口，避免从客户端声明侧误进入调试。
+- 从接口跳转到调试页时，会根据方法参数自动预填 Path、Query、Header、Cookie 与 JSON Body 草稿。
+- Controller 方法 gutter 图标右键菜单支持“调试接口”和“复制 URL”两个操作。
+- Feign / HttpExchange 方法 gutter 图标只保留左键跳转，不再提供右键菜单操作。
+
 ## [1.0.0] - 2026-06-17
 
 ### 新增
@@ -17,4 +26,5 @@
 - 支持 Java 与 Kotlin 源码
 - 支持中英双语界面
 
+[1.0.1]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.1
 [1.0.0]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.0

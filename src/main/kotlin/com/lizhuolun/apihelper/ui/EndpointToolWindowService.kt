@@ -1,8 +1,12 @@
 package com.lizhuolun.apihelper.ui
 
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Computable
+import com.intellij.openapi.wm.ToolWindowManager
 import com.lizhuolun.apihelper.cache.CacheChangeListener
+import com.lizhuolun.apihelper.core.HttpMappingInfo
 
 /**
  * 工具窗口面板管理器，负责在 PSI 变更或缓存刷新时通知面板更新。
@@ -47,6 +51,23 @@ class EndpointToolWindowService(private val project: Project) {
     fun refresh() {
         if (project.isDisposed) return
         panel?.refresh()
+    }
+
+    /**
+     * 打开工具窗口并切换到指定 Controller 端点的调试页。
+     *
+     * @param info Controller 端点映射
+     */
+    fun debugEndpoint(info: HttpMappingInfo) {
+        if (project.isDisposed) return
+        val item = ApplicationManager.getApplication().runReadAction(Computable {
+            val method = info.resolveMethod() ?: return@Computable null
+            EndpointTreeItem.from(info, method)
+        }) ?: return
+        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("ApiHelper")
+        toolWindow?.show {
+            panel?.showDebugPanel(item)
+        } ?: panel?.showDebugPanel(item)
     }
 
     companion object {

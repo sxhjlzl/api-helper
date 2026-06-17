@@ -6,6 +6,13 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
 import com.intellij.openapi.ui.ComboBox
+import com.intellij.psi.PsiAnnotation
+import com.intellij.psi.PsiAnnotationMemberValue
+import com.intellij.psi.PsiArrayInitializerMemberValue
+import com.intellij.psi.PsiField
+import com.intellij.psi.PsiLiteralExpression
+import com.intellij.psi.PsiParameter
+import com.intellij.psi.PsiReferenceExpression
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
@@ -16,6 +23,7 @@ import com.intellij.util.ui.UIUtil
 import com.lizhuolun.apihelper.ApiHelperBundle
 import com.lizhuolun.apihelper.config.ApplicationConfigReader
 import com.lizhuolun.apihelper.core.HttpMethod
+import com.lizhuolun.apihelper.core.annotation.SpringAnnotations
 import com.lizhuolun.apihelper.settings.ApiHelperSettings
 import com.lizhuolun.apihelper.ui.EndpointTreeItem
 import com.lizhuolun.apihelper.ui.component.ApiHelperUiStyle
@@ -91,6 +99,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
     private val urlEncodedModel = DebugParameterTableModel(showDeleteColumn = true)
 
     private val bodyTypeGroup = ButtonGroup()
+    private val bodyTypeButtons = mutableMapOf<BodyType, JRadioButton>()
     private val bodyCardLayout = CardLayout()
     private val bodyContentPanel = JPanel(bodyCardLayout)
     private var currentServerPort = DEFAULT_SERVER_PORT
@@ -149,10 +158,18 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         methodBox.selectedItem = if (item.httpMethod == HttpMethod.ANY) "GET" else item.httpMethod.name
         currentServerPort = resolveServerPort(item)
         urlField.text = normalizeInitialUrl(item.url, currentServerPort)
-        pathModel.setNames(extractPathVariables(item.url))
-        queryModel.clear()
-        headerModel.clear()
-        cookieModel.clear()
+        val params = resolveDebugParams(item)
+        pathModel.setPairs(pathPairs(item.url, params.path))
+        queryModel.setPairs(params.query)
+        headerModel.setPairs(params.headers)
+        cookieModel.setPairs(params.cookies)
+        formDataModel.clear()
+        urlEncodedModel.clear()
+        binaryPath = ""
+        binaryPathLabel.text = ApiHelperBundle.message("debug.body.binary.placeholder")
+        binaryPathLabel.foreground = UIUtil.getContextHelpForeground()
+        requestBodyArea.text = params.bodyText
+        selectBodyType(if (params.bodyText.isBlank()) BodyType.NONE else BodyType.JSON)
         requestStatusLabel.text = ApiHelperBundle.message("debug.status.loaded", item.methodName)
         contentTabs.selectedIndex = 0
     }
@@ -202,6 +219,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             font = font?.deriveFont(Font.PLAIN, 12f)
             isSelected = type == selectedBodyType
             bodyTypeGroup.add(this)
+            bodyTypeButtons[type] = this
             addActionListener {
                 selectedBodyType = type
                 bodyCardLayout.show(bodyContentPanel, type.card)
@@ -564,6 +582,138 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             .map { it.groupValues[1] }
             .toList()
     }
+
+    private fun pathPairs(url: String, annotatedPath: List<Pair<String, String>>): List<Pair<String, String>> {
+        val fromUrl = extractPathVariables(url).map { it to "" }
+        return (fromUrl + annotatedPath).distinctBy { it.first }
+    }
+
+    private fun selectBodyType(type: BodyType) {
+        selectedBodyType = type
+        bodyTypeButtons[type]?.isSelected = true
+        bodyCardLayout.show(bodyContentPanel, type.card)
+    }
+
+    private fun resolveDebugParams(item: EndpointTreeItem): DebugAutoParams {
+        return ApplicationManager.getApplication().runReadAction(Computable {
+            val method = item.pointer?.element?.takeIf { it.isValid } ?: return@Computable DebugAutoParams()
+            val auto = DebugAutoParamsBuilder()
+            val useQueryForUnannotated = item.httpMethod == HttpMethod.GET ||
+                    item.httpMethod == HttpMethod.DELETE ||
+                    item.httpMethod == HttpMethod.HEAD ||
+                    item.httpMethod == HttpMethod.ANY
+
+            for (parameter in method.parameterList.parameters) {
+                val name = parameterName(parameter)
+                when {
+                    parameter.hasAnnotation(SpringAnnotations.PATH_VARIABLE) -> {
+                        auto.path += annotationParameterName(parameter, SpringAnnotations.PATH_VARIABLE, name) to sampleValue(parameter)
+                    }
+                    parameter.hasAnnotation(SpringAnnotations.REQUEST_PARAM) -> {
+                        auto.query += annotationParameterName(parameter, SpringAnnotations.REQUEST_PARAM, name) to sampleValue(parameter)
+                    }
+                    parameter.hasAnnotation(SpringAnnotations.REQUEST_HEADER) -> {
+                        auto.headers += annotationParameterName(parameter, SpringAnnotations.REQUEST_HEADER, name) to sampleValue(parameter)
+                    }
+                    parameter.hasAnnotation(SpringAnnotations.COOKIE_VALUE) -> {
+                        auto.cookies += annotationParameterName(parameter, SpringAnnotations.COOKIE_VALUE, name) to sampleValue(parameter)
+                    }
+                    parameter.hasAnnotation(SpringAnnotations.REQUEST_BODY) -> {
+                        auto.bodyNames += name
+                    }
+                    useQueryForUnannotated -> {
+                        auto.query += name to sampleValue(parameter)
+                    }
+                    else -> {
+                        auto.bodyNames += name
+                    }
+                }
+            }
+            auto.build()
+        })
+    }
+
+    private fun PsiParameter.hasAnnotation(fqn: String): Boolean =
+        modifierList?.hasAnnotation(fqn) == true
+
+    private fun annotationParameterName(parameter: PsiParameter, fqn: String, fallback: String): String {
+        val annotation = parameter.modifierList?.findAnnotation(fqn) ?: return fallback
+        return readAnnotationString(annotation, "value")
+            ?: readAnnotationString(annotation, "name")
+            ?: fallback
+    }
+
+    private fun parameterName(parameter: PsiParameter): String =
+        parameter.name.takeIf { it.isNotBlank() } ?: "param"
+
+    private fun sampleValue(parameter: PsiParameter): String {
+        val type = parameter.type.canonicalText
+        return when {
+            type == "boolean" || type == "java.lang.Boolean" -> "true"
+            type == "int" || type == "long" || type == "short" ||
+                    type == "byte" || type == "double" || type == "float" ||
+                    type == "java.lang.Integer" || type == "java.lang.Long" ||
+                    type == "java.lang.Short" || type == "java.lang.Byte" ||
+                    type == "java.lang.Double" || type == "java.lang.Float" -> "0"
+            else -> ""
+        }
+    }
+
+    private fun readAnnotationString(annotation: PsiAnnotation, attributeName: String): String? {
+        val rawValue = annotation.findAttributeValue(attributeName) ?: return null
+        return resolveStringMemberValue(rawValue)
+    }
+
+    private fun resolveStringMemberValue(value: PsiAnnotationMemberValue): String? {
+        return when (value) {
+            is PsiLiteralExpression -> value.value as? String
+            is PsiReferenceExpression -> {
+                val resolved = value.resolve()
+                if (resolved is PsiField) {
+                    resolved.computeConstantValue() as? String
+                } else {
+                    null
+                }
+            }
+            is PsiArrayInitializerMemberValue -> {
+                val first = value.initializers.firstOrNull() ?: return null
+                resolveStringMemberValue(first)
+            }
+            else -> null
+        }
+    }
+
+    private class DebugAutoParamsBuilder {
+        val path = mutableListOf<Pair<String, String>>()
+        val query = mutableListOf<Pair<String, String>>()
+        val headers = mutableListOf<Pair<String, String>>()
+        val cookies = mutableListOf<Pair<String, String>>()
+        val bodyNames = mutableListOf<String>()
+
+        fun build(): DebugAutoParams {
+            val bodyText = bodyNames
+                .filter { it.isNotBlank() }
+                .distinct()
+                .takeIf { it.isNotEmpty() }
+                ?.joinToString(separator = ",\n", prefix = "{\n", postfix = "\n}") { "  \"$it\": \"\"" }
+                .orEmpty()
+            return DebugAutoParams(
+                path = path.distinctBy { it.first },
+                query = query.distinctBy { it.first },
+                headers = headers.distinctBy { it.first },
+                cookies = cookies.distinctBy { it.first },
+                bodyText = bodyText,
+            )
+        }
+    }
+
+    private data class DebugAutoParams(
+        val path: List<Pair<String, String>> = emptyList(),
+        val query: List<Pair<String, String>> = emptyList(),
+        val headers: List<Pair<String, String>> = emptyList(),
+        val cookies: List<Pair<String, String>> = emptyList(),
+        val bodyText: String = "",
+    )
 
     private fun hasHeader(headers: List<Pair<String, String>>, name: String): Boolean =
         headers.any { it.first.equals(name, ignoreCase = true) }

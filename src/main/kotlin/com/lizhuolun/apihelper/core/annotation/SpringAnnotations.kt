@@ -40,6 +40,14 @@ object SpringAnnotations {
     const val DELETE_EXCHANGE = "org.springframework.web.service.annotation.DeleteExchange"
     const val PATCH_EXCHANGE = "org.springframework.web.service.annotation.PatchExchange"
 
+    // ------------------- 参数级注解 -------------------
+
+    const val PATH_VARIABLE = "org.springframework.web.bind.annotation.PathVariable"
+    const val REQUEST_PARAM = "org.springframework.web.bind.annotation.RequestParam"
+    const val REQUEST_HEADER = "org.springframework.web.bind.annotation.RequestHeader"
+    const val COOKIE_VALUE = "org.springframework.web.bind.annotation.CookieValue"
+    const val REQUEST_BODY = "org.springframework.web.bind.annotation.RequestBody"
+
     // ------------------- 方法级注解 FQN -> 默认 HttpMethod 映射 -------------------
 
     /**
