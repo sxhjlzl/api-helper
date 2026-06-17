@@ -1,0 +1,22 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="5" y1="4" x2="35" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F766E"/>
+      <stop offset="0.52" stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="route" x1="8" y1="12" x2="32" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#84CC16"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="38" height="38" rx="10" fill="url(#bg)"/>
+  <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" stroke="#FFFFFF" stroke-opacity="0.14"/>
+  <path d="M11 13h9c2.2 0 4 1.8 4 4v6c0 2.2 1.8 4 4 4h1" stroke="url(#route)" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M29.2 23.7 33 27l-3.8 3.3v-2.1h-3.1v-2.4h3.1v-2.1Z" fill="#F8FAFC"/>
+  <path d="M11 27h-1.2L7 24.3v-8.6L9.8 13H11v3.2h-1v7.6h1V27Z" fill="#F59E0B"/>
+  <path d="M29 13h1.2l2.8 2.7v4.1h-3v-3.6h-1V13Z" fill="#2DD4BF"/>
+  <circle cx="20" cy="20" r="6.7" fill="#F8FAFC"/>
+  <circle cx="20" cy="20" r="5" fill="#111827"/>
+  <path d="M16.2 22.8 18.9 17h2.2l2.7 5.8h-1.9l-.4-1h-3l-.4 1h-1.9Zm2.9-2.4h1.8l-.9-2.1-.9 2.1Z" fill="#F8FAFC"/>
+</svg>

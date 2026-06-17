@@ -1,0 +1,116 @@
+<!-- ApiHelper plugin descriptor -->
+<idea-plugin url="https://github.com/sxhjlzl/api-helper">
+    <id>com.lizhuolun.apihelper</id>
+    <name>ApiHelper</name>
+    <!--suppress SpellCheckingInspection -->
+    <vendor email="maybe.zhuo@qq.com" url="https://github.com/sxhjlzl/api-helper">lizhuolun</vendor>
+
+    <description><![CDATA[
+        <h2>ApiHelper</h2>
+        <p>
+          A lightweight API assistant for <b>Spring MVC</b>, <b>Spring Cloud OpenFeign</b>,
+          and Spring 6 <b>@HttpExchange</b>, built for endpoint navigation, endpoint browsing,
+          and API debugging directly inside IntelliJ IDEA.
+        </p>
+
+        <h3>Features</h3>
+        <ul>
+            <li><b>Bidirectional gutter navigation</b> between <code>@FeignClient</code> / <code>@HttpExchange</code> interfaces and <code>@RestController</code> methods.</li>
+            <li><b>One-click path copy</b> — right-click any gutter arrow to copy the resolved endpoint path.</li>
+            <li><b>Endpoint explorer</b> — browse Controller and Feign / HttpExchange endpoints from the ApiHelper tool window.</li>
+            <li><b>API debugging</b> — send HTTP requests with query, path, header, cookie, and body parameters.</li>
+            <li><b>Body modes</b> — supports none, form-data, x-www-form-urlencoded, JSON, XML, raw, and binary requests.</li>
+            <li><b>Spring configuration aware</b> — automatically resolves <code>server.servlet.context-path</code>, <code>spring.mvc.servlet.path</code>, <code>application-{profile}.yml</code> and <code>${var:default}</code> placeholders.</li>
+            <li><b>Java &amp; Kotlin</b> sources, courtesy of UAST.</li>
+            <li><b>Project-level caching</b> with incremental refresh on PSI and Spring configuration changes.</li>
+            <li><b>Bilingual UI</b> — English &amp; Simplified Chinese bundle.</li>
+        </ul>
+
+        <h3>Compatibility</h3>
+        <p>
+          IntelliJ IDEA <b>2024.3+</b> (build 243+).
+          Requires the bundled Java and Kotlin plugins.
+        </p>
+
+        <h3>Links</h3>
+        <ul>
+            <li><a href="https://github.com/sxhjlzl/api-helper">Source on GitHub</a></li>
+            <li><a href="https://github.com/sxhjlzl/api-helper/blob/main/CHANGELOG_en.md">Changelog</a></li>
+            <li><a href="https://github.com/sxhjlzl/api-helper/issues">Report an issue</a></li>
+        </ul>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <h3>1.0.0</h3>
+        <ul>
+            <li>Initial ApiHelper release.</li>
+            <li>Added Spring MVC Controller, OpenFeign, and <code>@HttpExchange</code> endpoint navigation.</li>
+            <li>Added endpoint explorer and lightweight API debugger in the ApiHelper tool window.</li>
+            <li>Added Query, Path, Header, Cookie, form-data, x-www-form-urlencoded, JSON, XML, raw, and binary request support.</li>
+            <li>Added Spring configuration resolution for context path, servlet path, profile, server port, and placeholders.</li>
+            <li>Added Java and Kotlin source support via UAST.</li>
+            <li>English &amp; Simplified Chinese bundle.</li>
+        </ul>
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
+    <depends>org.jetbrains.kotlin</depends>
+
+    <resource-bundle>messages.ApiHelperBundle</resource-bundle>
+
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <supportsKotlinPluginMode supportsK1="true" supportsK2="true"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij">
+
+        <!-- 2 个行内导航图标 Provider（左键跳转、右键复制 URL），同时在 Java 与 Kotlin 上注册 -->
+        <codeInsight.lineMarkerProvider
+                language="JAVA"
+                implementationClass="com.lizhuolun.apihelper.provider.linemarker.FeignToControllerLineMarker"/>
+        <codeInsight.lineMarkerProvider
+                language="kotlin"
+                implementationClass="com.lizhuolun.apihelper.provider.linemarker.FeignToControllerLineMarker"/>
+
+        <codeInsight.lineMarkerProvider
+                language="JAVA"
+                implementationClass="com.lizhuolun.apihelper.provider.linemarker.ControllerToFeignLineMarker"/>
+        <codeInsight.lineMarkerProvider
+                language="kotlin"
+                implementationClass="com.lizhuolun.apihelper.provider.linemarker.ControllerToFeignLineMarker"/>
+
+        <!-- 用户配置页 -->
+        <applicationConfigurable
+                parentId="tools"
+                id="com.lizhuolun.apihelper.settings.ApiHelperConfigurable"
+                instance="com.lizhuolun.apihelper.settings.ApiHelperConfigurable"
+                bundle="messages.ApiHelperBundle"
+                key="settings.title"/>
+
+        <!-- ApiHelper 工具窗口：展示 Controller / Feign 端点列表 -->
+        <toolWindow
+                id="ApiHelper"
+                anchor="right"
+                factoryClass="com.lizhuolun.apihelper.ui.EndpointToolWindowFactory"
+                icon="/icons/toolWindow.svg"
+                secondary="false"
+                canCloseContents="false"/>
+
+        <!-- 工程打开后异步预热缓存 -->
+        <postStartupActivity
+                implementation="com.lizhuolun.apihelper.listener.ApiHelperStartupActivity"/>
+
+        <!-- PSI 变更监听器 -->
+        <psi.treeChangeListener
+                implementation="com.lizhuolun.apihelper.listener.ApiHelperPsiListener"/>
+
+        <!-- 复制 URL 时的通知组 -->
+        <notificationGroup
+                id="ApiHelper"
+                displayType="BALLOON"
+                bundle="messages.ApiHelperBundle"
+                key="notification.group.name"/>
+
+    </extensions>
+</idea-plugin>
