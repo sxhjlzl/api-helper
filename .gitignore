@@ -1,0 +1,63 @@
+# Gradle
+.gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+out/
+
+# IntelliJ Platform Gradle Plugin sandbox & generated metadata
+**/sandbox/
+**/idea-sandbox/
+.intellijPlatform/
+
+# IDE - IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+.shelf/
+
+# IDE - VS Code
+.vscode/
+
+# IDE - Eclipse
+.classpath
+.project
+.settings/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Logs
+*.log
+
+# Plugin Verifier reports
+verification-*/
+
+# Kotlin
+.kotlin/
+
+# Local env
+.env
+.env.*
+!.env.example
+local.properties
+
+# Signing credentials
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+AGENTS.md
+
