@@ -134,7 +134,6 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
             updateIdeTabCounts(total, filtered)
         }
         controllerTree.onDebugRequested = { showDebugPanel(it) }
-        feignTree.onDebugRequested = { showDebugPanel(it) }
 
         searchBoxPanel.isVisible = false
         searchField.document.addDocumentListener(object : DocumentListener {
@@ -348,7 +347,7 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         updateInterfaceHeaderVisibility()
     }
 
-    private fun showDebugPanel(item: EndpointTreeItem) {
+    fun showDebugPanel(item: EndpointTreeItem) {
         activeMainCard = CARD_DEBUG
         debugPanel.loadEndpoint(item)
         mainCardLayout.show(mainContentPanel, CARD_DEBUG)

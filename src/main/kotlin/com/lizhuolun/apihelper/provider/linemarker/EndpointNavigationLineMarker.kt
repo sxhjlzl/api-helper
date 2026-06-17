@@ -24,6 +24,7 @@ import com.intellij.psi.PsiMethod
 import com.lizhuolun.apihelper.ApiHelperBundle
 import com.lizhuolun.apihelper.core.HttpMappingInfo
 import com.lizhuolun.apihelper.provider.UastElementUtils
+import com.lizhuolun.apihelper.ui.EndpointToolWindowService
 import java.awt.datatransfer.StringSelection
 import java.awt.event.MouseEvent
 import javax.swing.Icon
@@ -43,6 +44,21 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
     protected abstract val accessibleKey: String
 
     /**
+     * tooltip 底部操作提示。
+     */
+    protected open val tooltipHintKey: String = "linemarker.tooltip.hint"
+
+    /**
+     * 是否在 gutter 右键菜单中提供操作。
+     */
+    protected open val popupActionsEnabled: Boolean = true
+
+    /**
+     * 是否在 gutter 右键菜单中提供调试入口。
+     */
+    protected open val debugPopupActionEnabled: Boolean = false
+
+    /**
      * 当前 LineMarker 是否应该对该方法生效。
      */
     protected abstract fun isApplicable(method: PsiMethod): Boolean
@@ -60,9 +76,9 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
     protected abstract fun findTargets(project: Project, method: PsiMethod): List<HttpMappingInfo>
 
     /**
-     * 计算当前方法自身的 URL（用于右键复制）。
+     * 计算当前方法自身的映射信息（用于右键复制与调试）。
      */
-    protected abstract fun resolveSelfUrl(project: Project, method: PsiMethod): String?
+    protected abstract fun resolveSelfMapping(project: Project, method: PsiMethod): HttpMappingInfo?
 
     final override fun getName(): String = ApiHelperBundle.message(accessibleKey)
 
@@ -79,10 +95,11 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
         // 只有存在对端匹配时才显示 gutter 图标，避免无对应接口的方法出现冗余图标
         if (!hasCounterpart(project, method)) return null
 
-        val selfUrl = resolveSelfUrl(project, method)
+        val selfMapping = resolveSelfMapping(project, method)
+        val selfUrl = selfMapping?.url
 
         val tooltipTitle = ApiHelperBundle.message(titleKey)
-        val tooltipHint = ApiHelperBundle.message("linemarker.tooltip.hint")
+        val tooltipHint = ApiHelperBundle.message(tooltipHintKey)
         val tooltip = if (selfUrl.isNullOrEmpty()) {
             "$tooltipTitle<br/>$tooltipHint"
         } else {
@@ -97,7 +114,9 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
             project = project,
             titleKey = titleKey,
             targetProvider = ::findTargets,
-            selfUrl = selfUrl,
+            selfMapping = selfMapping,
+            popupActionsEnabled = popupActionsEnabled,
+            debugPopupActionEnabled = debugPopupActionEnabled,
         )
     }
 
@@ -114,7 +133,9 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
         private val project: Project,
         private val titleKey: String,
         private val targetProvider: (Project, PsiMethod) -> List<HttpMappingInfo>,
-        private val selfUrl: String?,
+        private val selfMapping: HttpMappingInfo?,
+        private val popupActionsEnabled: Boolean,
+        private val debugPopupActionEnabled: Boolean,
     ) : LineMarkerInfo<PsiElement>(
         element,
         element.textRange,
@@ -129,10 +150,20 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
         override fun createGutterRenderer(): GutterIconRenderer {
             return object : LineMarkerGutterIconRenderer<PsiElement>(this) {
                 override fun getPopupMenuActions(): ActionGroup? {
-                    val url = selfUrl
-                    if (url.isNullOrBlank()) return null
+                    if (!popupActionsEnabled) return null
+                    val mapping = selfMapping ?: return null
+                    val url = mapping.url
+                    if (url.isBlank()) return null
                     val group = DefaultActionGroup()
-                    val label = ApiHelperBundle.message("popup.copy.url.action", url)
+                    if (debugPopupActionEnabled) {
+                        group.add(object : AnAction(ApiHelperBundle.message("popup.debug.endpoint.action"), null, AllIcons.Actions.Execute) {
+                            override fun actionPerformed(e: AnActionEvent) {
+                                EndpointToolWindowService.of(project).debugEndpoint(mapping)
+                            }
+                        })
+                        group.addSeparator()
+                    }
+                    val label = ApiHelperBundle.message("popup.copy.url.action")
                     group.add(object : AnAction(label, null, AllIcons.Actions.Copy) {
                         override fun actionPerformed(e: AnActionEvent) {
                             copyUrlAndNotify(project, url)

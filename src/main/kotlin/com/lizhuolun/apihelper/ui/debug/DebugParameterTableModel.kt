@@ -68,6 +68,23 @@ class DebugParameterTableModel(
     }
 
     /**
+     * 使用指定键值对重置表格。
+     *
+     * @param pairs 参数键值对
+     */
+    fun setPairs(pairs: List<Pair<String, String>>) {
+        rows.clear()
+        rows.addAll(
+            pairs
+                .filter { it.first.isNotBlank() }
+                .distinctBy { it.first }
+                .map { DebugParameterRow(name = it.first, value = it.second) },
+        )
+        ensureTrailingBlankRow()
+        fireTableDataChanged()
+    }
+
+    /**
      * 清空表格内容。
      */
     fun clear() {

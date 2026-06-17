@@ -16,7 +16,7 @@
         <h3>Features</h3>
         <ul>
             <li><b>Bidirectional gutter navigation</b> between <code>@FeignClient</code> / <code>@HttpExchange</code> interfaces and <code>@RestController</code> methods.</li>
-            <li><b>One-click path copy</b> — right-click any gutter arrow to copy the resolved endpoint path.</li>
+            <li><b>Controller gutter actions</b> — right-click Controller gutter arrows to debug the endpoint or copy the resolved URL.</li>
             <li><b>Endpoint explorer</b> — browse Controller and Feign / HttpExchange endpoints from the ApiHelper tool window.</li>
             <li><b>API debugging</b> — send HTTP requests with query, path, header, cookie, and body parameters.</li>
             <li><b>Body modes</b> — supports none, form-data, x-www-form-urlencoded, JSON, XML, raw, and binary requests.</li>
@@ -41,6 +41,14 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.0.1</h3>
+        <ul>
+            <li>Removed debugger entry from Feign / HttpExchange endpoint list context menus.</li>
+            <li>Automatically prefill Path, Query, Header, Cookie, and JSON Body draft parameters when opening the debugger from an endpoint.</li>
+            <li>Controller gutter context menus now support both debugging the endpoint and copying the resolved URL.</li>
+            <li>Feign / HttpExchange gutter icons keep left-click navigation only, with no context-menu actions.</li>
+        </ul>
+
         <h3>1.0.0</h3>
         <ul>
             <li>Initial ApiHelper release.</li>
@@ -65,7 +73,7 @@
 
     <extensions defaultExtensionNs="com.intellij">
 
-        <!-- 2 个行内导航图标 Provider（左键跳转、右键复制 URL），同时在 Java 与 Kotlin 上注册 -->
+        <!-- 2 个行内导航图标 Provider（左键跳转；Controller 侧右键调试与复制 URL），同时在 Java 与 Kotlin 上注册 -->
         <codeInsight.lineMarkerProvider
                 language="JAVA"
                 implementationClass="com.lizhuolun.apihelper.provider.linemarker.FeignToControllerLineMarker"/>
