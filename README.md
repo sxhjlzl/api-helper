@@ -1,8 +1,33 @@
-# ApiHelper
+<p align="center">
+  <img src="docs/images/cover.png" alt="ApiHelper cover">
+</p>
 
-面向 Spring API 的 IntelliJ IDEA 工具插件，提供接口导航、接口列表和轻量 API 调试能力。
+<p align="center">
+  <a href="https://plugins.jetbrains.com/plugin/32327-apihelper"><img src="https://img.shields.io/jetbrains/plugin/v/32327-apihelper?label=Marketplace&color=0f766e" alt="JetBrains Marketplace version"></a>
+  <a href="https://plugins.jetbrains.com/plugin/32327-apihelper"><img src="https://img.shields.io/jetbrains/plugin/d/32327-apihelper?label=downloads&color=2563eb" alt="JetBrains Marketplace downloads"></a>
+  <a href="https://github.com/sxhjlzl/api-helper/blob/main/LICENSE"><img src="https://img.shields.io/github/license/sxhjlzl/api-helper?color=64748b" alt="License"></a>
+  <a href="https://github.com/sxhjlzl/api-helper/stargazers"><img src="https://img.shields.io/github/stars/sxhjlzl/api-helper?style=social" alt="GitHub stars"></a>
+</p>
+
+<p align="center">
+  <a href="https://plugins.jetbrains.com/plugin/32327-apihelper">插件市场</a>
+  ·
+  <a href="https://github.com/sxhjlzl/api-helper/issues">反馈问题</a>
+  ·
+  <a href="./README_en.md">English</a>
+</p>
 
 ApiHelper 支持 Spring MVC Controller、Spring Cloud OpenFeign 以及 Spring 6 `@HttpExchange` 声明式 HTTP 客户端，适合在日常开发中快速定位接口、复制路径并直接发起调试请求。
+
+## 为什么需要 ApiHelper
+
+在 Spring 项目里，接口相关操作经常分散在多个地方：Controller、Feign Client、配置文件、接口文档、调试工具和全局搜索。ApiHelper 把这些高频动作收回到 IDEA 里：
+
+- 从客户端声明快速跳到 Controller。
+- 从 Controller 反向找到调用方声明。
+- 直接复制解析后的接口 URL。
+- 在工具窗口里集中浏览项目接口。
+- 对接口发起一次轻量调试请求。
 
 ## 功能
 
@@ -16,9 +41,17 @@ ApiHelper 支持 Spring MVC Controller、Spring Cloud OpenFeign 以及 Spring 6 
 - 基于 UAST 同时支持 Java 与 Kotlin
 - 中英双语界面
 
+## 预览
+
+| 双向导航 | 工具窗口 | 轻量调试 |
+| --- | --- | --- |
+| Feign / HttpExchange 与 Controller 互相跳转 | 集中展示 Controller 与客户端接口 | 在 IDEA 内快速验证接口响应 |
+
 ## 安装
 
-可通过 JetBrains Marketplace 搜索 `ApiHelper` 安装。
+插件已上架 JetBrains Marketplace：[ApiHelper - JetBrains Marketplace](https://plugins.jetbrains.com/plugin/32327-apihelper)
+
+也可以在 IDEA 中选择 `Settings` -> `Plugins`，搜索 `ApiHelper` 后直接安装。
 
 本地安装：
 
@@ -48,6 +81,15 @@ build/distributions/api-helper-<version>.zip
 路径：`Settings` -> `Tools` -> `ApiHelper`
 
 可手动指定 Spring active profile。留空时插件会尝试从项目配置中自动推断。
+
+## 兼容性
+
+| 项 | 说明 |
+| --- | --- |
+| 目标 IDE | IntelliJ IDEA 2024.3+ |
+| 依赖插件 | Java、Kotlin |
+| 支持源码 | Java、Kotlin |
+| 支持框架 | Spring MVC、Spring Cloud OpenFeign、Spring 6 `@HttpExchange` |
 
 ## 开发
 
@@ -89,3 +131,7 @@ src/main/resources/
 ## 版本
 
 当前版本：`1.0.0`
+
+## 反馈与支持
+
+欢迎下载使用，也欢迎通过 [GitHub Issues](https://github.com/sxhjlzl/api-helper/issues) 提出建议或反馈问题。如果 ApiHelper 对你有帮助，欢迎给项目点一个 Star。

@@ -76,7 +76,3 @@ Please open an issue via [GitHub Issues](https://github.com/sxhjlzl/api-helper/i
 - A minimal reproducer (project zip or code snippet)
 - Expected vs. actual behavior
 - Stack trace, if any
-
-## Code of Conduct
-
-By participating you agree to abide by the [Contributor Covenant Code of Conduct](./CODE_OF_CONDUCT.md).

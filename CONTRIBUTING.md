@@ -76,7 +76,3 @@
 - 最小可复现示例（项目 zip 或代码片段）
 - 期望行为与实际行为
 - 异常堆栈（如有）
-
-## 行为准则
-
-参与本项目即表示你同意遵守 [Contributor Covenant Code of Conduct](./CODE_OF_CONDUCT.md)。

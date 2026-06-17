@@ -1,8 +1,33 @@
-# ApiHelper
+<p align="center">
+  <img src="docs/images/cover.png" alt="ApiHelper cover">
+</p>
 
-An IntelliJ IDEA plugin for Spring APIs, providing endpoint navigation, endpoint browsing, and lightweight API debugging.
+<p align="center">
+  <a href="https://plugins.jetbrains.com/plugin/32327-apihelper"><img src="https://img.shields.io/jetbrains/plugin/v/32327-apihelper?label=Marketplace&color=0f766e" alt="JetBrains Marketplace version"></a>
+  <a href="https://plugins.jetbrains.com/plugin/32327-apihelper"><img src="https://img.shields.io/jetbrains/plugin/d/32327-apihelper?label=downloads&color=2563eb" alt="JetBrains Marketplace downloads"></a>
+  <a href="https://github.com/sxhjlzl/api-helper/blob/main/LICENSE"><img src="https://img.shields.io/github/license/sxhjlzl/api-helper?color=64748b" alt="License"></a>
+  <a href="https://github.com/sxhjlzl/api-helper/stargazers"><img src="https://img.shields.io/github/stars/sxhjlzl/api-helper?style=social" alt="GitHub stars"></a>
+</p>
+
+<p align="center">
+  <a href="https://plugins.jetbrains.com/plugin/32327-apihelper">Marketplace</a>
+  ·
+  <a href="https://github.com/sxhjlzl/api-helper/issues">Issues</a>
+  ·
+  <a href="./README.md">中文</a>
+</p>
 
 ApiHelper supports Spring MVC Controllers, Spring Cloud OpenFeign, and Spring 6 `@HttpExchange` declarative HTTP clients. It helps you locate endpoints, copy resolved paths, and send debug requests directly from the IDE.
+
+## Why ApiHelper
+
+In Spring projects, endpoint-related work is often scattered across Controllers, Feign clients, configuration files, API docs, debug tools, and global search. ApiHelper brings these common actions back into IDEA:
+
+- Jump from a client declaration to its Controller method.
+- Navigate back from a Controller to the matching client declaration.
+- Copy the resolved endpoint URL directly.
+- Browse project endpoints from a focused tool window.
+- Send a lightweight debug request without leaving the IDE.
 
 ## Features
 
@@ -16,9 +41,17 @@ ApiHelper supports Spring MVC Controllers, Spring Cloud OpenFeign, and Spring 6 
 - Java and Kotlin support via UAST
 - English and Simplified Chinese UI
 
+## Preview
+
+| Bidirectional navigation | Tool window | Lightweight debugging |
+| --- | --- | --- |
+| Navigate between Feign / HttpExchange and Controller methods | Browse Controller and client endpoints in one place | Quickly verify endpoint responses inside IDEA |
+
 ## Installation
 
-Install ApiHelper from JetBrains Marketplace by searching for `ApiHelper`.
+ApiHelper is available on JetBrains Marketplace: [ApiHelper - JetBrains Marketplace](https://plugins.jetbrains.com/plugin/32327-apihelper)
+
+You can also install it from IDEA via `Settings` -> `Plugins` by searching for `ApiHelper`.
 
 Local installation:
 
@@ -48,6 +81,15 @@ After opening a Spring Web, OpenFeign, or `@HttpExchange` project, ApiHelper sca
 Path: `Settings` -> `Tools` -> `ApiHelper`
 
 You can manually specify the Spring active profile. Leave it empty to let the plugin infer profiles from project configuration.
+
+## Compatibility
+
+| Item | Description |
+| --- | --- |
+| Target IDE | IntelliJ IDEA 2024.3+ |
+| Required plugins | Java, Kotlin |
+| Source support | Java, Kotlin |
+| Supported frameworks | Spring MVC, Spring Cloud OpenFeign, Spring 6 `@HttpExchange` |
 
 ## Development
 
@@ -89,3 +131,7 @@ src/main/resources/
 ## Version
 
 Current version: `1.0.0`
+
+## Feedback And Support
+
+You are welcome to try ApiHelper and share suggestions or issues through [GitHub Issues](https://github.com/sxhjlzl/api-helper/issues). If the plugin helps your daily workflow, a GitHub Star is appreciated.
