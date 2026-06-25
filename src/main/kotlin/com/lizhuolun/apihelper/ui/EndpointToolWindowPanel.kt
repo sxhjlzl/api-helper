@@ -38,6 +38,7 @@ import javax.swing.Icon
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
+import javax.swing.SwingConstants
 import javax.swing.UIManager
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
@@ -88,6 +89,7 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
 
     private val searchBadgeLabel = JLabel("").apply {
         foreground = UIUtil.getContextHelpForeground()
+        verticalAlignment = SwingConstants.CENTER
     }
 
     private val mainNavButtons = mutableListOf<JLabel>()
@@ -106,6 +108,8 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
     private var isSearchVisible: Boolean = false
     private var activeMainCard: String = CARD_INTERFACE
     private var activeInterfaceTab: String = CARD_CONTROLLER
+    private var controllerEndpointsLoaded: Boolean = false
+    private var clientEndpointsLoaded: Boolean = false
 
     init {
         isOpaque = true
@@ -156,16 +160,45 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
     /**
      * 从缓存刷新两侧列表；缓存为空时执行一次后台全量扫描。
      */
-    fun refresh() {
+    fun refresh(forceScan: Boolean = false) {
         if (project.isDisposed) return
         val cache = BilateralMappingCacheService.of(project)
-        var controllers = cache.getAllControllerMappings()
-        var clients = cache.getAllClientMappings()
+        var controllers: List<HttpMappingInfo>
+        var clients: List<HttpMappingInfo>
 
-        if (controllers.isEmpty() || clients.isEmpty()) {
-            val (scannedControllers, scannedClients) = scanInBackground()
-            if (controllers.isEmpty()) controllers = scannedControllers
-            if (clients.isEmpty()) clients = scannedClients
+        if (forceScan) {
+            val scanned = scanInBackground()
+            if (scanned.failed) {
+                controllers = cache.getAllControllerMappings()
+                clients = cache.getAllClientMappings()
+            } else {
+                controllers = scanned.controllers
+                clients = scanned.clients
+                controllerEndpointsLoaded = true
+                clientEndpointsLoaded = true
+                cache.replaceController(controllers)
+                cache.replaceClient(clients)
+            }
+        } else {
+            controllers = cache.getAllControllerMappings()
+            clients = cache.getAllClientMappings()
+            if (controllers.isNotEmpty()) controllerEndpointsLoaded = true
+            if (clients.isNotEmpty()) clientEndpointsLoaded = true
+            if (!controllerEndpointsLoaded || !clientEndpointsLoaded) {
+                val scanned = scanInBackground()
+                if (!scanned.failed) {
+                    if (!controllerEndpointsLoaded) {
+                        controllers = scanned.controllers
+                        cache.replaceController(scanned.controllers)
+                        controllerEndpointsLoaded = true
+                    }
+                    if (!clientEndpointsLoaded) {
+                        clients = scanned.clients
+                        cache.replaceClient(scanned.clients)
+                        clientEndpointsLoaded = true
+                    }
+                }
+            }
         }
 
         ApplicationManager.getApplication().invokeLater {
@@ -229,7 +262,7 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
 
     private fun buildToolbar(): JComponent {
         val actionGroup = DefaultActionGroup().apply {
-            add(ToolbarAction(ApiHelperBundle.message("toolwindow.action.refresh"), AllIcons.Actions.Refresh) { refresh() })
+            add(ToolbarAction(ApiHelperBundle.message("toolwindow.action.refresh"), AllIcons.Actions.Refresh) { refresh(forceScan = true) })
             add(ToolbarAction(ApiHelperBundle.message("toolwindow.action.search"), AllIcons.Actions.Search) { toggleSearch() })
             addSeparator()
             add(ToolbarAction(ApiHelperBundle.message("toolwindow.action.expand.all"), AllIcons.Actions.Expandall) {
@@ -265,6 +298,7 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
 
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0)).apply {
             isOpaque = false
+            ApiHelperUiStyle.applyHeaderHeight(this)
             add(searchBadgeLabel)
         }
 
@@ -413,26 +447,28 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         searchBadgeLabel.isVisible = text.isNotEmpty()
     }
 
-    private fun scanInBackground(): Pair<List<HttpMappingInfo>, List<HttpMappingInfo>> {
+    private fun scanInBackground(): EndpointScanResult {
         return try {
-            ProgressManager.getInstance().runProcessWithProgressSynchronously<Pair<List<HttpMappingInfo>, List<HttpMappingInfo>>, RuntimeException>(
-                {
-                    val manualProfile = ApiHelperSettings.getInstance().state.manualActiveProfile
-                    ApplicationManager.getApplication().runReadAction(Computable {
-                        val controllers = EndpointScanner.scanControllerEndpoints(project, manualProfile)
-                        val clients = EndpointScanner.scanClientEndpoints(project)
-                        controllers to clients
-                    })
-                },
-                ApiHelperBundle.message("progress.finding.targets"),
-                true,
-                project,
-            )
+            val (controllers, clients) = ProgressManager.getInstance()
+                .runProcessWithProgressSynchronously<Pair<List<HttpMappingInfo>, List<HttpMappingInfo>>, RuntimeException>(
+                    {
+                        val manualProfile = ApiHelperSettings.getInstance().state.manualActiveProfile
+                        ApplicationManager.getApplication().runReadAction(Computable {
+                            val controllers = EndpointScanner.scanControllerEndpoints(project, manualProfile)
+                            val clients = EndpointScanner.scanClientEndpoints(project)
+                            controllers to clients
+                        })
+                    },
+                    ApiHelperBundle.message("progress.finding.targets"),
+                    true,
+                    project,
+                )
+            EndpointScanResult(controllers, clients, failed = false)
         } catch (e: ProcessCanceledException) {
             throw e
         } catch (e: Exception) {
             log.warn("ApiHelper: 工具窗口扫描端点失败, project=${project.name}", e)
-            emptyList<HttpMappingInfo>() to emptyList<HttpMappingInfo>()
+            EndpointScanResult(emptyList(), emptyList(), failed = true)
         }
     }
 
@@ -469,4 +505,10 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
                 ?: UIManager.getColor("Tree.selectionInactiveBackground")
                 ?: UIUtil.getPanelBackground()
     }
+
+    private data class EndpointScanResult(
+        val controllers: List<HttpMappingInfo>,
+        val clients: List<HttpMappingInfo>,
+        val failed: Boolean,
+    )
 }

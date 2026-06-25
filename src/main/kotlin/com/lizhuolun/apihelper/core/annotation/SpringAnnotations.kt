@@ -47,6 +47,8 @@ object SpringAnnotations {
     const val REQUEST_HEADER = "org.springframework.web.bind.annotation.RequestHeader"
     const val COOKIE_VALUE = "org.springframework.web.bind.annotation.CookieValue"
     const val REQUEST_BODY = "org.springframework.web.bind.annotation.RequestBody"
+    const val SPRING_QUERY_MAP = "org.springframework.cloud.openfeign.SpringQueryMap"
+    const val FEIGN_QUERY_MAP = "feign.QueryMap"
 
     // ------------------- 方法级注解 FQN -> 默认 HttpMethod 映射 -------------------
 

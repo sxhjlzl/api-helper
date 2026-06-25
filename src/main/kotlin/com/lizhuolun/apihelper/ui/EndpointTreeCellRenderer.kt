@@ -139,6 +139,7 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
         }
         groupCountBadge.text = count
         typeIconLabel.icon = typeIconOf(className)
+        toolTipText = className
     }
 
     private fun renderEndpointNode(node: EndpointNode) {
@@ -146,6 +147,11 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
         methodBadge.method = item.httpMethod
         urlLabel.text = item.url
         methodNameLabel.text = item.methodName
+        toolTipText = listOfNotNull(
+            "${item.httpMethod.name} ${item.url}",
+            item.className,
+            item.moduleName.takeIf { it.isNotBlank() }?.let { "module: $it" },
+        ).joinToString("<br>", prefix = "<html>", postfix = "</html>")
     }
 
     private fun updateLabelColors(selected: Boolean) {

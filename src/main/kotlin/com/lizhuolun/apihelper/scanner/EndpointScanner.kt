@@ -50,12 +50,15 @@ object EndpointScanner {
         )
         val result = ArrayList<HttpMappingInfo>(classes.size * 8)
         for (cls in classes) {
-            if (!AnnotationParser.isClientInterface(cls)) continue
-            val kind = when {
-                AnnotationParser.isFeignInterface(cls) -> EndpointKind.FEIGN
-                else -> EndpointKind.HTTP_EXCHANGE
-            }
-            result.addAll(extractClientMappings(cls, kind))
+            val mappings = recoverableScan(
+                message = { "ApiHelper: 客户端端点解析失败, class=${classNameForLog(cls)}" },
+            ) {
+                val kind = resolveKind(cls)
+                    ?.takeIf { it == EndpointKind.FEIGN || it == EndpointKind.HTTP_EXCHANGE }
+                    ?: return@recoverableScan emptyList()
+                extractClientMappings(cls, kind)
+            } ?: continue
+            result.addAll(mappings)
         }
         return result
     }
@@ -76,8 +79,15 @@ object EndpointScanner {
         val configCache = HashMap<String, Map<String, Any?>>()
         val result = ArrayList<HttpMappingInfo>(classes.size * 8)
         for (cls in classes) {
-            if (!AnnotationParser.isControllerClass(cls)) continue
-            result.addAll(extractControllerMappings(cls, manualProfile, configCache))
+            val mappings = recoverableScan(
+                message = { "ApiHelper: Controller 端点解析失败, class=${classNameForLog(cls)}" },
+            ) {
+                if (resolveKind(cls) != EndpointKind.CONTROLLER) {
+                    return@recoverableScan emptyList()
+                }
+                extractControllerMappings(cls, manualProfile, configCache)
+            } ?: continue
+            result.addAll(mappings)
         }
         return result
     }
@@ -160,11 +170,13 @@ object EndpointScanner {
      * @param psiClass 待识别的类
      * @return 对应的 EndpointKind，无法识别时返回 null
      */
-    fun resolveKind(psiClass: PsiClass): EndpointKind? = when {
-        AnnotationParser.isFeignInterface(psiClass) -> EndpointKind.FEIGN
-        AnnotationParser.isHttpExchangeInterface(psiClass) -> EndpointKind.HTTP_EXCHANGE
-        AnnotationParser.isControllerClass(psiClass) -> EndpointKind.CONTROLLER
-        else -> null
+    fun resolveKind(psiClass: PsiClass): EndpointKind? = computeInReadAction {
+        when {
+            AnnotationParser.isFeignInterface(psiClass) -> EndpointKind.FEIGN
+            AnnotationParser.isHttpExchangeInterface(psiClass) -> EndpointKind.HTTP_EXCHANGE
+            AnnotationParser.isControllerClass(psiClass) -> EndpointKind.CONTROLLER
+            else -> null
+        }
     }
 
     /**
@@ -185,19 +197,17 @@ object EndpointScanner {
         var anySearched = false
 
         for (fqn in annotationFqns) {
-            val annotationClass = facade.findClass(fqn, allScope)
-            if (annotationClass == null) {
-                LOG.debug("ApiHelper: 未找到注解类, fqn=$fqn, 跳过")
-                continue
-            }
-            anySearched = true
-            try {
+            recoverableScan(
+                message = { "ApiHelper: AnnotatedElementsSearch 查询失败, fqn=$fqn" },
+            ) {
+                val annotationClass = facade.findClass(fqn, allScope)
+                if (annotationClass == null) {
+                    LOG.debug("ApiHelper: 未找到注解类, fqn=$fqn, 跳过")
+                    return@recoverableScan
+                }
+                anySearched = true
                 val query = AnnotatedElementsSearch.searchPsiClasses(annotationClass, scope)
                 collected.addAll(query.findAll())
-            } catch (e: ProcessCanceledException) {
-                throw e
-            } catch (e: Exception) {
-                LOG.warn("ApiHelper: AnnotatedElementsSearch 查询失败, fqn=$fqn", e)
             }
         }
 
@@ -239,4 +249,38 @@ object EndpointScanner {
      */
     private inline fun <T> computeInReadAction(crossinline block: () -> T): T =
         ApplicationManager.getApplication().runReadAction(Computable { block() })
+
+    /**
+     * 执行一次可恢复扫描步骤。索引或 PSI 的瞬态不一致只影响当前步骤，
+     * 取消操作仍继续向上抛出，避免吞掉用户取消与 IDE 取消信号。
+     *
+     * @param message 延迟构造的日志信息
+     * @param block 扫描逻辑
+     * @return 扫描结果；失败时返回 null
+     */
+    private inline fun <T> recoverableScan(
+        message: () -> String,
+        block: () -> T,
+    ): T? = try {
+        block()
+    } catch (e: ProcessCanceledException) {
+        throw e
+    } catch (e: Exception) {
+        LOG.warn(message(), e)
+        null
+    }
+
+    /**
+     * 获取用于日志的类名。这里不能让日志辅助逻辑影响主流程。
+     *
+     * @param psiClass PSI 类
+     * @return 类名；无法读取时返回 unknown
+     */
+    private fun classNameForLog(psiClass: PsiClass): String = try {
+        computeInReadAction {
+            psiClass.qualifiedName ?: psiClass.name ?: "anonymous"
+        }
+    } catch (_: Exception) {
+        "unknown"
+    }
 }
