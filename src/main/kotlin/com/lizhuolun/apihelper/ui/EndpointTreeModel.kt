@@ -22,14 +22,16 @@ class EndpointTreeModel : DefaultTreeModel(EndpointNode.group("Root")) {
         val byClass = items
             .sortedWith(
                 compareBy<EndpointTreeItem> { it.className }
+                    .thenBy { it.moduleName }
                     .thenBy { it.url }
                     .thenBy { it.httpMethod.name }
                     .thenBy { it.methodName },
             )
-            .groupBy { it.className }
+            .groupBy { it.className to it.moduleName }
 
-        for ((className, list) in byClass) {
-            val group = EndpointNode.group("$className (${list.size})")
+        for ((key, list) in byClass) {
+            val (className, moduleName) = key
+            val group = EndpointNode.group("$className (${list.size})", moduleName)
             for (item in list) {
                 group.add(EndpointNode.from(item))
             }

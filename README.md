@@ -26,6 +26,7 @@ ApiHelper 支持 Spring MVC Controller、Spring Cloud OpenFeign 以及 Spring 6 
 - 从客户端声明快速跳到 Controller。
 - 从 Controller 反向找到调用方声明。
 - 直接复制解析后的接口 URL。
+- 复制标准 Markdown 接口文档，包含参数与返回字段说明。
 - 在工具窗口里集中浏览项目接口。
 - 对接口发起一次轻量调试请求。
 
@@ -34,10 +35,16 @@ ApiHelper 支持 Spring MVC Controller、Spring Cloud OpenFeign 以及 Spring 6 
 - `@FeignClient` / `@HttpExchange` 接口方法与 `@RestController` 方法双向 gutter 跳转
 - Controller gutter 右键调试接口或复制解析后的接口 URL
 - ApiHelper 工具窗口集中展示 Controller 与 Feign / HttpExchange 端点
-- 支持搜索、展开、收起、跳转对端、复制 URL；Controller 接口支持右键调试
+- 支持多关键词搜索、手动刷新、展开、收起、跳转对端、复制 URL；Controller 接口支持右键调试
+- 端点右键支持复制标准 Markdown 接口文档
+- 接口文档自动识别方法注释、字段 Javadoc、Swagger 注解说明与 `@param` 参数说明
+- 接口文档自动展开 Query DTO、Request Body DTO 与返回 DTO 字段
+- 支持 `@SpringQueryMap` / `@QueryMap` 与 GET / DELETE / HEAD 未标注 DTO 参数展开为 Query 参数
+- 支持 `DllResult<T>`、`DllPageResult<T>`、`List<T>` 等常见泛型返回结构的字段展开
 - 内置轻量 API 调试页，支持 Query、Path、Header、Cookie 和多种 Body 类型
 - 从接口进入调试页时自动预填 Path、Query、Header、Cookie 与 JSON Body 草稿
-- 支持 JSON 响应自动格式化
+- 支持 JSON 响应自动格式化；大响应默认只预览前 5 MB，避免占用过多内存
+- binary 与 form-data 文件调试请求使用流式发送，避免大文件一次性读入内存
 - 自动解析 Spring 配置中的 context-path、servlet path、profile 与占位符
 - 基于 UAST 同时支持 Java 与 Kotlin
 - 中英双语界面
@@ -78,6 +85,9 @@ build/distributions/api-helper-<version>.zip
 - 打开右侧 `ApiHelper` 工具窗口，可浏览接口列表或切换到调试页。
 - 在 Controller 接口列表中右键具体接口，可调试、跳转对端或复制 URL。
 - 在 Feign / HttpExchange 接口列表中右键具体接口，可跳转对端或复制 URL。
+- 在接口列表中右键具体接口并选择“复制接口文档”，可复制标准 Markdown 文档。文档包含基本信息、接口说明、Path / Query / Header / Cookie 参数、请求体、返回参数以及字段说明。
+- GET / DELETE / HEAD 等接口中未标注的 DTO 参数会按 Query 参数展开；POST / PUT / PATCH 等接口中未标注的 DTO 参数会按请求体字段展开。
+- 返回值是包装泛型时，会保留包装字段并展开实际数据字段，例如 `DllResult<List<UserRes>>` 会生成 `data[].id`、`data[].name` 这类返回参数。
 
 ## 设置
 
@@ -133,7 +143,7 @@ src/main/resources/
 
 ## 版本
 
-当前版本：`1.0.1`
+当前版本：`1.0.2`
 
 ## 反馈与支持
 

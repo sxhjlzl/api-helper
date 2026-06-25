@@ -18,8 +18,10 @@
             <li><b>Bidirectional gutter navigation</b> between <code>@FeignClient</code> / <code>@HttpExchange</code> interfaces and <code>@RestController</code> methods.</li>
             <li><b>Controller gutter actions</b> — right-click Controller gutter arrows to debug the endpoint or copy the resolved URL.</li>
             <li><b>Endpoint explorer</b> — browse Controller and Feign / HttpExchange endpoints from the ApiHelper tool window.</li>
+            <li><b>Markdown API docs</b> — copy endpoint documentation with request parameters, request body fields, response fields, and descriptions from Javadocs or Swagger annotations.</li>
             <li><b>API debugging</b> — send HTTP requests with query, path, header, cookie, and body parameters.</li>
             <li><b>Body modes</b> — supports none, form-data, x-www-form-urlencoded, JSON, XML, raw, and binary requests.</li>
+            <li><b>Large payload friendly</b> — streams file uploads and limits response preview size to reduce memory usage.</li>
             <li><b>Spring configuration aware</b> — automatically resolves <code>server.servlet.context-path</code>, <code>spring.mvc.servlet.path</code>, <code>application-{profile}.yml</code> and <code>${var:default}</code> placeholders.</li>
             <li><b>Java &amp; Kotlin</b> sources, courtesy of UAST.</li>
             <li><b>Project-level caching</b> with incremental refresh on PSI and Spring configuration changes.</li>
@@ -41,6 +43,19 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.0.2</h3>
+        <ul>
+            <li>Added a native IDE-style endpoint context menu with "Copy API Docs".</li>
+            <li>API docs now generate standard Markdown and include endpoint metadata, descriptions, Path / Query / Header / Cookie parameters, request body fields, and response fields.</li>
+            <li>API docs extract field and parameter descriptions from Javadocs, <code>@param</code>, and Swagger annotations.</li>
+            <li>DTO parameters are expanded for Query and request body sections, including <code>@SpringQueryMap</code> / <code>@QueryMap</code>.</li>
+            <li>Generic response wrappers such as <code>DllResult&lt;T&gt;</code>, <code>DllPageResult&lt;T&gt;</code>, and <code>List&lt;T&gt;</code> are expanded into fields such as <code>data[].field</code> and <code>records[].field</code>.</li>
+            <li>Improved multi-keyword endpoint search and manual endpoint refresh behavior.</li>
+            <li>Optimized large file debug requests by streaming binary and form-data uploads.</li>
+            <li>Limited debug response body preview to the first 5 MB to reduce memory usage.</li>
+            <li>Fixed transient IntelliJ index and PSI-change issues during endpoint refresh.</li>
+        </ul>
+
         <h3>1.0.1</h3>
         <ul>
             <li>Removed debugger entry from Feign / HttpExchange endpoint list context menus.</li>

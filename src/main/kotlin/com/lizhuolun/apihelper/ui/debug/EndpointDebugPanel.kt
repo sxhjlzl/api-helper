@@ -6,13 +6,6 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.psi.PsiAnnotation
-import com.intellij.psi.PsiAnnotationMemberValue
-import com.intellij.psi.PsiArrayInitializerMemberValue
-import com.intellij.psi.PsiField
-import com.intellij.psi.PsiLiteralExpression
-import com.intellij.psi.PsiParameter
-import com.intellij.psi.PsiReferenceExpression
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
@@ -25,6 +18,7 @@ import com.lizhuolun.apihelper.config.ApplicationConfigReader
 import com.lizhuolun.apihelper.core.HttpMethod
 import com.lizhuolun.apihelper.core.annotation.SpringAnnotations
 import com.lizhuolun.apihelper.settings.ApiHelperSettings
+import com.lizhuolun.apihelper.ui.EndpointParameterResolver
 import com.lizhuolun.apihelper.ui.EndpointTreeItem
 import com.lizhuolun.apihelper.ui.component.ApiHelperUiStyle
 import java.awt.BorderLayout
@@ -33,14 +27,14 @@ import java.awt.Component
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Font
-import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.net.HttpCookie
+import java.net.http.HttpHeaders
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
-import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.charset.StandardCharsets
 import java.time.Duration
@@ -155,10 +149,21 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
      * @param item 端点展示项
      */
     fun loadEndpoint(item: EndpointTreeItem) {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            if (project.isDisposed) return@executeOnPooledThread
+            val serverPort = resolveServerPort(item)
+            val params = resolveDebugParams(item)
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+                applyLoadedEndpoint(item, serverPort, params)
+            }
+        }
+    }
+
+    private fun applyLoadedEndpoint(item: EndpointTreeItem, serverPort: Int, params: DebugAutoParams) {
         methodBox.selectedItem = if (item.httpMethod == HttpMethod.ANY) "GET" else item.httpMethod.name
-        currentServerPort = resolveServerPort(item)
+        currentServerPort = serverPort
         urlField.text = normalizeInitialUrl(item.url, currentServerPort)
-        val params = resolveDebugParams(item)
         pathModel.setPairs(pathPairs(item.url, params.path))
         queryModel.setPairs(params.query)
         headerModel.setPairs(params.headers)
@@ -182,7 +187,11 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                 BorderFactory.createMatteBorder(0, 0, 1, 0, ApiHelperUiStyle.borderColor()),
                 BorderFactory.createEmptyBorder(5, 8, 5, 8),
             )
-            add(methodBox, BorderLayout.WEST)
+            val left = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
+                isOpaque = false
+                add(methodBox)
+            }
+            add(left, BorderLayout.WEST)
             add(urlField, BorderLayout.CENTER)
             add(sendButton, BorderLayout.EAST)
             add(requestStatusLabel, BorderLayout.SOUTH)
@@ -434,11 +443,18 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             val started = System.nanoTime()
             try {
                 val request = buildRequest(input)
-                val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+                val response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream())
+                val responseBody = response.body().use(::readLimitedText)
                 val elapsedMs = Duration.ofNanos(System.nanoTime() - started).toMillis()
                 ApplicationManager.getApplication().invokeLater {
                     if (project.isDisposed) return@invokeLater
-                    showResponse(response, elapsedMs)
+                    showResponse(
+                        statusCode = response.statusCode(),
+                        headers = response.headers(),
+                        body = responseBody.text,
+                        truncated = responseBody.truncated,
+                        elapsedMs = elapsedMs,
+                    )
                     contentTabs.selectedIndex = 1
                     sendButton.isEnabled = true
                 }
@@ -482,13 +498,13 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                 if (!hasHeader(input.headers, "Content-Type")) {
                     builder.setHeader("Content-Type", input.bodyType.contentType)
                 }
-                HttpRequest.BodyPublishers.ofByteArray(Files.readAllBytes(Path.of(input.binaryPath.trim())))
+                HttpRequest.BodyPublishers.ofFile(Path.of(input.binaryPath.trim()))
             }
             input.bodyType == BodyType.FORM_DATA -> {
                 if (!hasHeader(input.headers, "Content-Type")) {
                     builder.setHeader("Content-Type", input.bodyType.contentType)
                 }
-                HttpRequest.BodyPublishers.ofByteArray(multipartBytes(input.formData))
+                multipartPublisher(input.formData)
             }
             else -> {
                 val requestBody = bodyText(input)
@@ -501,20 +517,30 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         return builder.method(method, bodyPublisher).build()
     }
 
-    private fun showResponse(response: HttpResponse<String>, elapsedMs: Long) {
+    private fun showResponse(
+        statusCode: Int,
+        headers: HttpHeaders,
+        body: String,
+        truncated: Boolean,
+        elapsedMs: Long,
+    ) {
         requestStatusLabel.text = ApiHelperBundle.message(
             "debug.status.done",
-            response.statusCode(),
+            statusCode,
             elapsedMs,
         )
         requestStatusLabel.foreground = UIUtil.getContextHelpForeground()
-        lastResponseBody = response.body().orEmpty()
+        lastResponseBody = if (truncated) {
+            body + ApiHelperBundle.message("debug.response.truncated", MAX_RESPONSE_PREVIEW_BYTES / MB)
+        } else {
+            body
+        }
         renderResponseBody()
-        responseHeaderArea.text = response.headers().map().entries
+        responseHeaderArea.text = headers.map().entries
             .sortedBy { it.key }
             .joinToString("\n") { (name, values) -> "$name: ${values.joinToString(", ")}" }
         responseHeaderArea.caretPosition = 0
-        responseCookieArea.text = response.headers().allValues("set-cookie")
+        responseCookieArea.text = headers.allValues("set-cookie")
             .flatMap { value -> runCatching { HttpCookie.parse(value) }.getOrDefault(emptyList()) }
             .joinToString("\n") { cookie -> "${cookie.name}=${cookie.value}" }
         responseCookieArea.caretPosition = 0
@@ -585,7 +611,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
 
     private fun pathPairs(url: String, annotatedPath: List<Pair<String, String>>): List<Pair<String, String>> {
         val fromUrl = extractPathVariables(url).map { it to "" }
-        return (fromUrl + annotatedPath).distinctBy { it.first }
+        return (annotatedPath + fromUrl).distinctBy { it.first }
     }
 
     private fun selectBodyType(type: BodyType) {
@@ -604,28 +630,36 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                     item.httpMethod == HttpMethod.ANY
 
             for (parameter in method.parameterList.parameters) {
-                val name = parameterName(parameter)
                 when {
-                    parameter.hasAnnotation(SpringAnnotations.PATH_VARIABLE) -> {
-                        auto.path += annotationParameterName(parameter, SpringAnnotations.PATH_VARIABLE, name) to sampleValue(parameter)
+                    EndpointParameterResolver.hasAnnotation(parameter, SpringAnnotations.PATH_VARIABLE) -> {
+                        val param = EndpointParameterResolver.annotatedParameter(parameter, SpringAnnotations.PATH_VARIABLE)
+                        auto.path += param.name to param.sampleValue
                     }
-                    parameter.hasAnnotation(SpringAnnotations.REQUEST_PARAM) -> {
-                        auto.query += annotationParameterName(parameter, SpringAnnotations.REQUEST_PARAM, name) to sampleValue(parameter)
+                    EndpointParameterResolver.hasAnnotation(parameter, SpringAnnotations.REQUEST_PARAM) -> {
+                        val param = EndpointParameterResolver.annotatedParameter(parameter, SpringAnnotations.REQUEST_PARAM)
+                        auto.query += param.name to param.sampleValue
                     }
-                    parameter.hasAnnotation(SpringAnnotations.REQUEST_HEADER) -> {
-                        auto.headers += annotationParameterName(parameter, SpringAnnotations.REQUEST_HEADER, name) to sampleValue(parameter)
+                    EndpointParameterResolver.hasAnnotation(parameter, SpringAnnotations.REQUEST_HEADER) -> {
+                        val param = EndpointParameterResolver.annotatedParameter(parameter, SpringAnnotations.REQUEST_HEADER)
+                        auto.headers += param.name to param.sampleValue
                     }
-                    parameter.hasAnnotation(SpringAnnotations.COOKIE_VALUE) -> {
-                        auto.cookies += annotationParameterName(parameter, SpringAnnotations.COOKIE_VALUE, name) to sampleValue(parameter)
+                    EndpointParameterResolver.hasAnnotation(parameter, SpringAnnotations.COOKIE_VALUE) -> {
+                        val param = EndpointParameterResolver.annotatedParameter(parameter, SpringAnnotations.COOKIE_VALUE)
+                        auto.cookies += param.name to param.sampleValue
                     }
-                    parameter.hasAnnotation(SpringAnnotations.REQUEST_BODY) -> {
-                        auto.bodyNames += name
+                    EndpointParameterResolver.hasAnnotation(parameter, SpringAnnotations.REQUEST_BODY) -> {
+                        auto.body += EndpointParameterResolver
+                            .bodyParameters(parameter, SpringAnnotations.REQUEST_BODY)
+                            .map { it.name to it.sampleValue }
+                    }
+                    EndpointParameterResolver.hasQueryMapAnnotation(parameter) -> {
+                        auto.query += EndpointParameterResolver.queryParameters(parameter).map { it.name to it.sampleValue }
                     }
                     useQueryForUnannotated -> {
-                        auto.query += name to sampleValue(parameter)
+                        auto.query += EndpointParameterResolver.queryParameters(parameter).map { it.name to it.sampleValue }
                     }
                     else -> {
-                        auto.bodyNames += name
+                        auto.body += EndpointParameterResolver.bodyParameters(parameter).map { it.name to it.sampleValue }
                     }
                 }
             }
@@ -633,69 +667,21 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         })
     }
 
-    private fun PsiParameter.hasAnnotation(fqn: String): Boolean =
-        modifierList?.hasAnnotation(fqn) == true
-
-    private fun annotationParameterName(parameter: PsiParameter, fqn: String, fallback: String): String {
-        val annotation = parameter.modifierList?.findAnnotation(fqn) ?: return fallback
-        return readAnnotationString(annotation, "value")
-            ?: readAnnotationString(annotation, "name")
-            ?: fallback
-    }
-
-    private fun parameterName(parameter: PsiParameter): String =
-        parameter.name.takeIf { it.isNotBlank() } ?: "param"
-
-    private fun sampleValue(parameter: PsiParameter): String {
-        val type = parameter.type.canonicalText
-        return when {
-            type == "boolean" || type == "java.lang.Boolean" -> "true"
-            type == "int" || type == "long" || type == "short" ||
-                    type == "byte" || type == "double" || type == "float" ||
-                    type == "java.lang.Integer" || type == "java.lang.Long" ||
-                    type == "java.lang.Short" || type == "java.lang.Byte" ||
-                    type == "java.lang.Double" || type == "java.lang.Float" -> "0"
-            else -> ""
-        }
-    }
-
-    private fun readAnnotationString(annotation: PsiAnnotation, attributeName: String): String? {
-        val rawValue = annotation.findAttributeValue(attributeName) ?: return null
-        return resolveStringMemberValue(rawValue)
-    }
-
-    private fun resolveStringMemberValue(value: PsiAnnotationMemberValue): String? {
-        return when (value) {
-            is PsiLiteralExpression -> value.value as? String
-            is PsiReferenceExpression -> {
-                val resolved = value.resolve()
-                if (resolved is PsiField) {
-                    resolved.computeConstantValue() as? String
-                } else {
-                    null
-                }
-            }
-            is PsiArrayInitializerMemberValue -> {
-                val first = value.initializers.firstOrNull() ?: return null
-                resolveStringMemberValue(first)
-            }
-            else -> null
-        }
-    }
-
     private class DebugAutoParamsBuilder {
         val path = mutableListOf<Pair<String, String>>()
         val query = mutableListOf<Pair<String, String>>()
         val headers = mutableListOf<Pair<String, String>>()
         val cookies = mutableListOf<Pair<String, String>>()
-        val bodyNames = mutableListOf<String>()
+        val body = mutableListOf<Pair<String, String>>()
 
         fun build(): DebugAutoParams {
-            val bodyText = bodyNames
-                .filter { it.isNotBlank() }
-                .distinct()
+            val bodyText = body
+                .filter { it.first.isNotBlank() }
+                .distinctBy { it.first }
                 .takeIf { it.isNotEmpty() }
-                ?.joinToString(separator = ",\n", prefix = "{\n", postfix = "\n}") { "  \"$it\": \"\"" }
+                ?.joinToString(separator = ",\n", prefix = "{\n", postfix = "\n}") {
+                    "  \"${it.first}\": ${jsonSampleValue(it.second)}"
+                }
                 .orEmpty()
             return DebugAutoParams(
                 path = path.distinctBy { it.first },
@@ -704,6 +690,13 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                 cookies = cookies.distinctBy { it.first },
                 bodyText = bodyText,
             )
+        }
+
+        private fun jsonSampleValue(value: String): String {
+            return when (value) {
+                "true", "false", "0" -> value
+                else -> "\"\""
+            }
         }
     }
 
@@ -727,23 +720,41 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         }
     }
 
-    private fun multipartBytes(rows: List<DebugParameterRow>): ByteArray {
-        val output = ByteArrayOutputStream()
+    private fun multipartPublisher(rows: List<DebugParameterRow>): HttpRequest.BodyPublisher {
+        val publishers = mutableListOf<HttpRequest.BodyPublisher>()
         for (row in rows) {
-            output.writeString("--$MULTIPART_BOUNDARY\r\n")
+            publishers += HttpRequest.BodyPublishers.ofString("--$MULTIPART_BOUNDARY\r\n", StandardCharsets.UTF_8)
             if (row.type == BodyFormDataTableModel.TYPE_FILE) {
                 val path = Path.of(row.value)
                 val fileName = path.fileName?.toString().orEmpty()
-                output.writeString("Content-Disposition: form-data; name=\"${row.name}\"; filename=\"$fileName\"\r\n\r\n")
-                output.write(Files.readAllBytes(path))
-                output.writeString("\r\n")
+                publishers += HttpRequest.BodyPublishers.ofString(
+                    "Content-Disposition: form-data; name=\"${row.name}\"; filename=\"$fileName\"\r\n\r\n",
+                    StandardCharsets.UTF_8,
+                )
+                publishers += HttpRequest.BodyPublishers.ofFile(path)
+                publishers += HttpRequest.BodyPublishers.ofString("\r\n", StandardCharsets.UTF_8)
             } else {
-                output.writeString("Content-Disposition: form-data; name=\"${row.name}\"\r\n\r\n")
-                output.writeString("${row.value}\r\n")
+                publishers += HttpRequest.BodyPublishers.ofString(
+                    "Content-Disposition: form-data; name=\"${row.name}\"\r\n\r\n${row.value}\r\n",
+                    StandardCharsets.UTF_8,
+                )
             }
         }
-        output.writeString("--$MULTIPART_BOUNDARY--\r\n")
-        return output.toByteArray()
+        publishers += HttpRequest.BodyPublishers.ofString("--$MULTIPART_BOUNDARY--\r\n", StandardCharsets.UTF_8)
+        return HttpRequest.BodyPublishers.concat(*publishers.toTypedArray())
+    }
+
+    private fun readLimitedText(input: InputStream): LimitedText {
+        val buffer = ByteArray(MAX_RESPONSE_PREVIEW_BYTES + 1)
+        var offset = 0
+        while (offset < buffer.size) {
+            val read = input.read(buffer, offset, buffer.size - offset)
+            if (read < 0) break
+            offset += read
+        }
+        val truncated = offset > MAX_RESPONSE_PREVIEW_BYTES
+        val length = offset.coerceAtMost(MAX_RESPONSE_PREVIEW_BYTES)
+        return LimitedText(String(buffer, 0, length, StandardCharsets.UTF_8), truncated)
     }
 
     private fun encode(value: String): String =
@@ -890,6 +901,11 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         val urlEncoded: List<Pair<String, String>>,
     )
 
+    private data class LimitedText(
+        val text: String,
+        val truncated: Boolean,
+    )
+
     private enum class BodyType(
         val label: String,
         val card: String,
@@ -917,6 +933,8 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         private const val BODY_TEXT_CARD = "text"
         private const val MULTIPART_BOUNDARY = "ApiHelperBoundary"
         private const val DEFAULT_SERVER_PORT = 8080
+        private const val MB = 1024 * 1024
+        private const val MAX_RESPONSE_PREVIEW_BYTES = 5 * MB
 
         private fun chooseLocalFile(): String? {
             val chooser = JFileChooser()
@@ -925,10 +943,6 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             } else {
                 null
             }
-        }
-
-        private fun ByteArrayOutputStream.writeString(value: String) {
-            write(value.toByteArray(StandardCharsets.UTF_8))
         }
     }
 }

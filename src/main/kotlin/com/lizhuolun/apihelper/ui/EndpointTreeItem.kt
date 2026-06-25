@@ -1,5 +1,6 @@
 package com.lizhuolun.apihelper.ui
 
+import com.intellij.openapi.module.ModuleUtilCore
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.SmartPsiElementPointer
 import com.lizhuolun.apihelper.core.EndpointKind
@@ -14,6 +15,7 @@ import com.lizhuolun.apihelper.core.HttpMappingInfo
  * @property httpMethod HTTP 方法
  * @property methodName 方法名
  * @property className 类全限定名
+ * @property moduleName 来源模块名
  * @property kind 端点类别
  * @property pointer 指向 PsiMethod 的智能指针，用于跳转
  * @author lizhuolun
@@ -24,6 +26,7 @@ data class EndpointTreeItem(
     val httpMethod: HttpMethod,
     val methodName: String,
     val className: String,
+    val moduleName: String,
     val kind: EndpointKind,
     val pointer: SmartPsiElementPointer<PsiMethod>?,
 ) {
@@ -44,6 +47,7 @@ data class EndpointTreeItem(
                 httpMethod = info.httpMethod,
                 methodName = method.name,
                 className = method.containingClass?.qualifiedName ?: "Unknown",
+                moduleName = ModuleUtilCore.findModuleForPsiElement(method)?.name.orEmpty(),
                 kind = info.kind,
                 pointer = info.methodPointer,
             )

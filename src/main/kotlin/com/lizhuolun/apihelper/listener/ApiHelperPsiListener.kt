@@ -1,18 +1,23 @@
 package com.lizhuolun.apihelper.listener
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Computable
+import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiInvalidElementAccessException
 import com.intellij.psi.PsiTreeChangeAdapter
 import com.intellij.psi.PsiTreeChangeEvent
+import com.intellij.psi.search.GlobalSearchScope
 import com.lizhuolun.apihelper.cache.BilateralMappingCacheService
 import com.lizhuolun.apihelper.cache.CacheChangeListener
 import com.lizhuolun.apihelper.cache.PsiClassCacheService
 import com.lizhuolun.apihelper.config.ApplicationConfigReader
 import com.lizhuolun.apihelper.core.EndpointKind
-import com.lizhuolun.apihelper.core.annotation.AnnotationParser
 import com.lizhuolun.apihelper.scanner.EndpointScanner
 import com.lizhuolun.apihelper.settings.ApiHelperSettings
 
@@ -29,6 +34,8 @@ import com.lizhuolun.apihelper.settings.ApiHelperSettings
  * @date 2026/6/9
  */
 class ApiHelperPsiListener : PsiTreeChangeAdapter() {
+
+    private val log = thisLogger()
 
     override fun childAdded(event: PsiTreeChangeEvent) {
         handleUpsert(event.child)
@@ -82,7 +89,7 @@ class ApiHelperPsiListener : PsiTreeChangeAdapter() {
         val qualifiedName = psiClass.qualifiedName ?: return
         PsiClassCacheService.of(project).removeByQualifiedName(qualifiedName)
         BilateralMappingCacheService.of(project).removeByClassQualifiedName(qualifiedName)
-        project.messageBus.syncPublisher(CacheChangeListener.TOPIC).onCacheChanged()
+        notifyCacheChangedLater(project)
     }
 
     /**
@@ -100,40 +107,82 @@ class ApiHelperPsiListener : PsiTreeChangeAdapter() {
 
         val psiClass = findPsiClass(element) ?: return
         val qualifiedName = psiClass.qualifiedName ?: return
-        val classCache = PsiClassCacheService.of(project)
-        val mappingCache = BilateralMappingCacheService.of(project)
-        classCache.removeByQualifiedName(qualifiedName)
-        mappingCache.removeByClassQualifiedName(qualifiedName)
-
-        if (!AnnotationParser.isClientInterface(psiClass) &&
-            !AnnotationParser.isControllerClass(psiClass)
-        ) {
-            return
-        }
-
-        classCache.upsert(psiClass)
-        refreshMappings(project, psiClass)
+        PsiClassCacheService.of(project).removeByQualifiedName(qualifiedName)
+        BilateralMappingCacheService.of(project).removeByClassQualifiedName(qualifiedName)
+        scheduleMappingRefresh(project, qualifiedName)
     }
 
     /**
-     * 类变更后重新解析其所有方法级映射，覆盖到缓存。
+     * 类变更后延迟解析其所有方法级映射，覆盖到缓存。
+     * PSI 事件派发期间禁止创建 SmartPsiElementPointer，因此这里只保留类全限定名，
+     * 等本轮 PSI change 结束后再进入后台 read action 创建指针。
      *
      * @param project 当前工程
-     * @param psiClass 发生变更的类
+     * @param qualifiedName 发生变更的类全限定名
      */
-    private fun refreshMappings(project: Project, psiClass: PsiClass) {
-        val cache = BilateralMappingCacheService.of(project)
-        val qualifiedName = psiClass.qualifiedName ?: return
-        cache.removeByClassQualifiedName(qualifiedName)
-        val kind = EndpointScanner.resolveKind(psiClass) ?: return
-        val mappings = if (kind == EndpointKind.CONTROLLER) {
-            val manualProfile = ApiHelperSettings.getInstance().state.manualActiveProfile
-            EndpointScanner.extractControllerMappings(psiClass, manualProfile)
-        } else {
-            EndpointScanner.extractClientMappings(psiClass, kind)
+    private fun scheduleMappingRefresh(project: Project, qualifiedName: String) {
+        ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed) return@invokeLater
+            DumbService.getInstance(project).runWhenSmart {
+                ApplicationManager.getApplication().executeOnPooledThread {
+                    try {
+                        val changed = ApplicationManager.getApplication().runReadAction(Computable {
+                            refreshMappings(project, qualifiedName)
+                        })
+                        if (changed && !project.isDisposed) {
+                            notifyCacheChangedLater(project)
+                        }
+                    } catch (_: ProcessCanceledException) {
+                    } catch (e: Exception) {
+                        log.warn("ApiHelper: PSI 增量刷新失败, class=$qualifiedName", e)
+                    }
+                }
+            }
         }
-        for (info in mappings) cache.upsert(info)
-        project.messageBus.syncPublisher(CacheChangeListener.TOPIC).onCacheChanged()
+    }
+
+    /**
+     * 延迟通知缓存变更，避免在 PSI 事件派发期间触发工具窗口刷新与兜底扫描。
+     *
+     * @param project 当前工程
+     */
+    private fun notifyCacheChangedLater(project: Project) {
+        ApplicationManager.getApplication().invokeLater {
+            if (!project.isDisposed) {
+                project.messageBus.syncPublisher(CacheChangeListener.TOPIC).onCacheChanged()
+            }
+        }
+    }
+
+    /**
+     * 在 read action 内重新解析指定类的映射。
+     *
+     * @param project 当前工程
+     * @param qualifiedName 发生变更的类全限定名
+     * @return 缓存内容发生变化时返回 true
+     */
+    private fun refreshMappings(project: Project, qualifiedName: String): Boolean {
+        val mappingCache = BilateralMappingCacheService.of(project)
+        val classCache = PsiClassCacheService.of(project)
+        mappingCache.removeByClassQualifiedName(qualifiedName)
+        classCache.removeByQualifiedName(qualifiedName)
+
+        val psiClass = JavaPsiFacade.getInstance(project)
+            .findClass(qualifiedName, GlobalSearchScope.projectScope(project))
+            ?: return true
+        val kind = EndpointScanner.resolveKind(psiClass) ?: return true
+        classCache.upsert(psiClass)
+        val mappings = when (kind) {
+            EndpointKind.CONTROLLER -> {
+                val manualProfile = ApiHelperSettings.getInstance().state.manualActiveProfile
+                EndpointScanner.extractControllerMappings(psiClass, manualProfile)
+            }
+            else -> EndpointScanner.extractClientMappings(psiClass, kind)
+        }
+        for (info in mappings) {
+            mappingCache.upsert(info)
+        }
+        return true
     }
 
     /**

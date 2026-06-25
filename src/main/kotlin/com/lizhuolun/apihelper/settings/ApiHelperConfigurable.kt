@@ -41,10 +41,12 @@ class ApiHelperConfigurable : Configurable {
     override fun apply() {
         val state = ApiHelperSettings.getInstance().state
         val newProfile = profileTextField.text.trim()
-        if (state.manualActiveProfile == newProfile) return
+        val profileChanged = state.manualActiveProfile != newProfile
         state.manualActiveProfile = newProfile
-        ProjectManager.getInstance().openProjects.forEach { project ->
-            BilateralMappingCacheService.of(project).scheduleControllerRefresh(delayMillis = 0)
+        if (profileChanged) {
+            ProjectManager.getInstance().openProjects.forEach { project ->
+                BilateralMappingCacheService.of(project).scheduleControllerRefresh(delayMillis = 0)
+            }
         }
     }
 

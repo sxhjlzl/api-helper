@@ -10,6 +10,7 @@ import javax.swing.tree.DefaultMutableTreeNode
  * @property title 节点展示文本
  * @property item 端点展示数据；为 null 时表示类分组节点
  * @property pointer 指向 PsiMethod 的智能指针；为 null 时表示分组节点
+ * @property moduleName 分组来源模块名
  * @author lizhuolun
  * @date 2026/6/12
  */
@@ -17,6 +18,7 @@ class EndpointNode(
     val title: String,
     val item: EndpointTreeItem? = null,
     val pointer: SmartPsiElementPointer<PsiMethod>? = null,
+    val moduleName: String = "",
 ) : DefaultMutableTreeNode() {
 
     override fun toString(): String = title
@@ -31,15 +33,17 @@ class EndpointNode(
          */
         fun from(item: EndpointTreeItem): EndpointNode {
             val display = "[${item.httpMethod.name}] ${item.url}  →  ${item.methodName}"
-            return EndpointNode(display, item, item.pointer)
+            return EndpointNode(display, item, item.pointer, item.moduleName)
         }
 
         /**
          * 创建类分组节点。
          *
          * @param className 类全限定名
+         * @param moduleName 来源模块名
          * @return 分组节点
          */
-        fun group(className: String): EndpointNode = EndpointNode(className)
+        fun group(className: String, moduleName: String = ""): EndpointNode =
+            EndpointNode(className, moduleName = moduleName)
     }
 }

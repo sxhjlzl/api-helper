@@ -26,6 +26,7 @@ In Spring projects, endpoint-related work is often scattered across Controllers,
 - Jump from a client declaration to its Controller method.
 - Navigate back from a Controller to the matching client declaration.
 - Copy the resolved endpoint URL directly.
+- Copy standard Markdown API documentation with parameter and response field descriptions.
 - Browse project endpoints from a focused tool window.
 - Send a lightweight debug request without leaving the IDE.
 
@@ -34,10 +35,16 @@ In Spring projects, endpoint-related work is often scattered across Controllers,
 - Bidirectional gutter navigation between `@FeignClient` / `@HttpExchange` methods and `@RestController` methods
 - Copy resolved endpoint URLs from gutter actions
 - Browse Controller and Feign / HttpExchange endpoints in the ApiHelper tool window
-- Search, expand, collapse, navigate to counterparts, and copy URLs from endpoint lists; Controller endpoints support context-menu debugging
+- Multi-keyword search, manual refresh, expand, collapse, counterpart navigation, and URL copy actions; Controller endpoints support context-menu debugging
+- Copy standard Markdown API documentation from endpoint context menus
+- API docs extract method comments, field Javadocs, Swagger annotation descriptions, and `@param` descriptions
+- API docs expand Query DTOs, Request Body DTOs, and response DTO fields
+- Supports `@SpringQueryMap` / `@QueryMap` and expands unannotated GET / DELETE / HEAD DTO parameters as Query parameters
+- Supports common generic response structures such as `DllResult<T>`, `DllPageResult<T>`, and `List<T>`
 - Lightweight API debugger with Query, Path, Header, Cookie, and multiple Body modes
 - Automatically prefill Path, Query, Header, Cookie, and JSON Body drafts when opening the debugger from an endpoint
-- Automatic JSON response formatting
+- Automatic JSON response formatting; large responses preview only the first 5 MB to avoid excessive memory usage
+- Binary and form-data file requests are sent with streaming publishers instead of loading whole files into memory
 - Spring context-path, servlet path, profile, and placeholder resolution
 - Java and Kotlin support via UAST
 - English and Simplified Chinese UI
@@ -78,6 +85,9 @@ After opening a Spring Web, OpenFeign, or `@HttpExchange` project, ApiHelper sca
 - Open the right-side `ApiHelper` tool window to browse endpoints or use the debugger.
 - Right-click a Controller endpoint row to debug, navigate to counterpart, or copy URL.
 - Right-click a Feign / HttpExchange endpoint row to navigate to counterpart or copy URL.
+- Right-click an endpoint row and choose "Copy API Docs" to copy standard Markdown documentation with basic info, description, Path / Query / Header / Cookie parameters, request body, response fields, and field descriptions.
+- Unannotated DTO parameters in GET / DELETE / HEAD endpoints are expanded as Query parameters; unannotated DTO parameters in POST / PUT / PATCH endpoints are expanded as request body fields.
+- Generic wrapper responses keep wrapper fields and expand actual data fields. For example, `DllResult<List<UserRes>>` produces response fields such as `data[].id` and `data[].name`.
 
 ## Settings
 
@@ -133,7 +143,7 @@ src/main/resources/
 
 ## Version
 
-Current version: `1.0.1`
+Current version: `1.0.2`
 
 ## Feedback And Support
 
