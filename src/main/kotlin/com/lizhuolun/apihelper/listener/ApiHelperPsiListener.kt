@@ -13,6 +13,7 @@ import com.intellij.psi.PsiInvalidElementAccessException
 import com.intellij.psi.PsiTreeChangeAdapter
 import com.intellij.psi.PsiTreeChangeEvent
 import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.util.concurrency.AppExecutorUtil
 import com.lizhuolun.apihelper.cache.BilateralMappingCacheService
 import com.lizhuolun.apihelper.cache.CacheChangeListener
 import com.lizhuolun.apihelper.cache.PsiClassCacheService
@@ -20,6 +21,7 @@ import com.lizhuolun.apihelper.config.ApplicationConfigReader
 import com.lizhuolun.apihelper.core.EndpointKind
 import com.lizhuolun.apihelper.scanner.EndpointScanner
 import com.lizhuolun.apihelper.settings.ApiHelperSettings
+import java.util.concurrent.TimeUnit
 
 /**
  * PSI 树变更监听器，维护 PsiClassCacheService 与 BilateralMappingCacheService 的实时性。
@@ -29,6 +31,8 @@ import com.lizhuolun.apihelper.settings.ApiHelperSettings
  * 2. 继承 PsiTreeChangeAdapter，只 override 实际关心的事件
  * 3. 在 Dumb 模式下直接 return，避免索引未就绪时触发异常
  * 4. 所有 PSI 访问前都先做 isValid / try-catch 防御，避免触碰已失效的节点（典型场景是 childRemoved 事件里 event.child 已经脱离 PSI 树，调用 getProject / getManager 会抛 PsiInvalidElementAccessException）
+ * 5. 类级缓存重建带防抖合并：childrenChanged 等事件在连续输入时会高频触发，
+ *    同一窗口期内的变更合并为一次后台重建，避免逐键重复解析整个类
  *
  * @author lizhuolun
  * @date 2026/6/9
@@ -36,6 +40,17 @@ import com.lizhuolun.apihelper.settings.ApiHelperSettings
 class ApiHelperPsiListener : PsiTreeChangeAdapter() {
 
     private val log = thisLogger()
+
+    /**
+     * 防抖窗口内待重建的类全限定名集合，与 [refreshScheduled] 共用同一把锁
+     **/
+    private val pendingRefreshLock = Any()
+    private val pendingRefreshClasses = LinkedHashSet<String>()
+
+    /**
+     * 是否已有排队的防抖重建任务，避免高频事件重复提交定时任务
+     **/
+    private var refreshScheduled = false
 
     override fun childAdded(event: PsiTreeChangeEvent) {
         handleUpsert(event.child)
@@ -117,25 +132,52 @@ class ApiHelperPsiListener : PsiTreeChangeAdapter() {
      * PSI 事件派发期间禁止创建 SmartPsiElementPointer，因此这里只保留类全限定名，
      * 等本轮 PSI change 结束后再进入后台 read action 创建指针。
      *
+     * 连续输入时 childrenChanged 会逐键触发，这里用固定窗口防抖合并：
+     * 窗口期内的变更类名累积到 [pendingRefreshClasses]，只由首个任务统一重建。
+     *
      * @param project 当前工程
      * @param qualifiedName 发生变更的类全限定名
      */
     private fun scheduleMappingRefresh(project: Project, qualifiedName: String) {
-        ApplicationManager.getApplication().invokeLater {
-            if (project.isDisposed) return@invokeLater
-            DumbService.getInstance(project).runWhenSmart {
-                ApplicationManager.getApplication().executeOnPooledThread {
-                    try {
-                        val changed = ApplicationManager.getApplication().runReadAction(Computable {
-                            refreshMappings(project, qualifiedName)
-                        })
-                        if (changed && !project.isDisposed) {
-                            notifyCacheChangedLater(project)
-                        }
-                    } catch (_: ProcessCanceledException) {
-                    } catch (e: Exception) {
-                        log.warn("ApiHelper: PSI 增量刷新失败, class=$qualifiedName", e)
+        synchronized(pendingRefreshLock) {
+            pendingRefreshClasses += qualifiedName
+            if (refreshScheduled) return
+            refreshScheduled = true
+        }
+        AppExecutorUtil.getAppScheduledExecutorService().schedule(
+            { runDebouncedRefresh(project) },
+            REFRESH_DEBOUNCE_MILLIS,
+            TimeUnit.MILLISECONDS,
+        )
+    }
+
+    /**
+     * 执行一轮防抖合并后的增量重建，取出窗口期内累积的全部待重建类。
+     * 执行期间新到的事件会重新排队下一轮，不会丢失。
+     *
+     * @param project 当前工程
+     */
+    private fun runDebouncedRefresh(project: Project) {
+        val qualifiedNames = synchronized(pendingRefreshLock) {
+            refreshScheduled = false
+            val snapshot = pendingRefreshClasses.toList()
+            pendingRefreshClasses.clear()
+            snapshot
+        }
+        if (project.isDisposed || qualifiedNames.isEmpty()) return
+
+        DumbService.getInstance(project).runWhenSmart {
+            ApplicationManager.getApplication().executeOnPooledThread {
+                try {
+                    val changed = ApplicationManager.getApplication().runReadAction(Computable {
+                        refreshMappings(project, qualifiedNames)
+                    })
+                    if (changed && !project.isDisposed) {
+                        notifyCacheChangedLater(project)
                     }
+                } catch (_: ProcessCanceledException) {
+                } catch (e: Exception) {
+                    log.warn("ApiHelper: PSI 增量刷新失败, classes=$qualifiedNames", e)
                 }
             }
         }
@@ -155,13 +197,26 @@ class ApiHelperPsiListener : PsiTreeChangeAdapter() {
     }
 
     /**
-     * 在 read action 内重新解析指定类的映射。
+     * 在 read action 内重新解析指定类集合的映射。
      *
      * @param project 当前工程
-     * @param qualifiedName 发生变更的类全限定名
+     * @param qualifiedNames 发生变更的类全限定名列表
      * @return 缓存内容发生变化时返回 true
      */
-    private fun refreshMappings(project: Project, qualifiedName: String): Boolean {
+    private fun refreshMappings(project: Project, qualifiedNames: List<String>): Boolean {
+        for (qualifiedName in qualifiedNames) {
+            refreshSingleClass(project, qualifiedName)
+        }
+        return true
+    }
+
+    /**
+     * 重建单个类的缓存条目，类已不存在或不再是端点类时仅保留删除结果。
+     *
+     * @param project 当前工程
+     * @param qualifiedName 类全限定名
+     */
+    private fun refreshSingleClass(project: Project, qualifiedName: String) {
         val mappingCache = BilateralMappingCacheService.of(project)
         val classCache = PsiClassCacheService.of(project)
         mappingCache.removeByClassQualifiedName(qualifiedName)
@@ -169,8 +224,8 @@ class ApiHelperPsiListener : PsiTreeChangeAdapter() {
 
         val psiClass = JavaPsiFacade.getInstance(project)
             .findClass(qualifiedName, GlobalSearchScope.projectScope(project))
-            ?: return true
-        val kind = EndpointScanner.resolveKind(psiClass) ?: return true
+            ?: return
+        val kind = EndpointScanner.resolveKind(psiClass) ?: return
         classCache.upsert(psiClass)
         val mappings = when (kind) {
             EndpointKind.CONTROLLER -> {
@@ -182,7 +237,6 @@ class ApiHelperPsiListener : PsiTreeChangeAdapter() {
         for (info in mappings) {
             mappingCache.upsert(info)
         }
-        return true
     }
 
     /**
@@ -251,5 +305,12 @@ class ApiHelperPsiListener : PsiTreeChangeAdapter() {
         } catch (_: PsiInvalidElementAccessException) {
             null
         }
+    }
+
+    companion object {
+        /**
+         * 增量重建防抖窗口，连续输入期间的变更合并为一次重建。
+         **/
+        private const val REFRESH_DEBOUNCE_MILLIS = 300L
     }
 }
