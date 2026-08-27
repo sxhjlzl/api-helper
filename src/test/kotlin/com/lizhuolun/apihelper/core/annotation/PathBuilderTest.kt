@@ -22,4 +22,19 @@ class PathBuilderTest {
             PathBuilder.buildControllerUrl("/gateway/", "/api", "/", "/users"),
         )
     }
+
+    @Test
+    fun `normalizeForMatch unifies path variable names`() {
+        assertEquals("/user/{}", PathBuilder.normalizeForMatch("/user/{id}"))
+        assertEquals("/user/{}", PathBuilder.normalizeForMatch("/user/{userId}"))
+        assertEquals(
+            "/order/{}/items/{}",
+            PathBuilder.normalizeForMatch("/order/{orderId}/items/{itemId}"),
+        )
+    }
+
+    @Test
+    fun `normalizeForMatch keeps plain path unchanged`() {
+        assertEquals("/api/hello", PathBuilder.normalizeForMatch("/api/hello"))
+    }
 }

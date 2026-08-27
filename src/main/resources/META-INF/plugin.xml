@@ -43,6 +43,16 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.0.3</h3>
+        <ul>
+            <li>Fixed counterpart matching failing entirely in projects with a configured <code>server.servlet.context-path</code>; matching now uses the relative path without the context-path.</li>
+            <li>Fixed matching failures when path variable names differ between the two sides, e.g. <code>{id}</code> vs <code>{userId}</code>.</li>
+            <li>Fixed a brief empty-cache window during full cache rebuilds that caused gutter icon flicker; caches are now replaced atomically.</li>
+            <li>Debug requests can now be cancelled while sending, and honor the IDE global HTTP proxy settings.</li>
+            <li>Debug connect and request timeouts are now configurable under Settings → Tools → ApiHelper.</li>
+            <li>Counterpart matching queries now use an inverted index for O(1) lookups, and PSI-driven cache rebuilds are debounced.</li>
+        </ul>
+
         <h3>1.0.2</h3>
         <ul>
             <li>Added a native IDE-style endpoint context menu with "Copy API Docs".</li>

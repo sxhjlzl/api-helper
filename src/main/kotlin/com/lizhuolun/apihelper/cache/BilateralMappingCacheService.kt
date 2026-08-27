@@ -18,13 +18,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 项目级"双边映射"缓存：分别存储客户端侧 (Feign + HttpExchange) 与 Controller 侧的 HttpMappingInfo。
  *
- * 查询按 HTTP 方法 + URL 匹配，性能从 O(N) 优化到 O(M)，M 为同端方法数。
+ * 查询按 HTTP 方法 + 归一化路径匹配，基于 matchUrl 倒排索引将查询复杂度从 O(N) 降为 O(1) 定位。
+ *
+ * 存储层采用不可变快照 + @Volatile 引用原子替换：
+ * 全量重建时不会再出现"先清空再逐条写入"的空窗期，
+ * 避免刷新瞬间查询到空缓存导致 gutter 图标闪烁或跳转误报无对端。
  *
  * @author lizhuolun
  * @date 2026/6/9
@@ -36,41 +39,102 @@ class BilateralMappingCacheService(
 ) {
 
     /**
-     * 客户端侧映射缓存，key 为 HttpMappingInfo.qualifier
-     **/
-    private val clientMappings: MutableMap<String, HttpMappingInfo> = ConcurrentHashMap()
+     * 单侧缓存的不可变快照，同时维护 qualifier 主键与 matchUrl 倒排索引。
+     * 构造后不再变更，任何增删都通过生成新快照完成。
+     *
+     * @property byQualifier 以 HttpMappingInfo.qualifier 为 key 的主索引
+     * @property byMatchUrl 以归一化匹配路径为 key 的倒排索引，供两端匹配查询使用
+     */
+    private class SideSnapshot(
+        val byQualifier: Map<String, HttpMappingInfo> = emptyMap(),
+    ) {
+
+        val byMatchUrl: Map<String, List<HttpMappingInfo>> =
+            byQualifier.values.groupBy { it.matchUrl }
+
+        /**
+         * 查找与给定映射归一化路径相同的候选项，只命中少数几条而非遍历全部缓存。
+         *
+         * @param source 用于提供 matchUrl 的源映射
+         * @return 同归一化路径的候选映射列表，无命中时返回空列表
+         */
+        fun candidatesOf(source: HttpMappingInfo): List<HttpMappingInfo> =
+            byMatchUrl[source.matchUrl].orEmpty()
+
+        /**
+         * 新增或覆盖一条映射，返回新快照。
+         *
+         * @param info 要写入的映射
+         * @return 写入后的新快照
+         */
+        fun plus(info: HttpMappingInfo): SideSnapshot =
+            SideSnapshot(byQualifier + (info.qualifier to info))
+
+        /**
+         * 按 qualifier 前缀批量移除，返回新快照。
+         *
+         * @param prefix qualifier 前缀，例如 "类全限定名#"
+         * @return 移除后的新快照；无命中时返回当前快照本身
+         */
+        fun removeByQualifierPrefix(prefix: String): SideSnapshot {
+            if (byQualifier.keys.none { it.startsWith(prefix) }) return this
+            return SideSnapshot(byQualifier.filterKeys { !it.startsWith(prefix) })
+        }
+
+        /**
+         * 移除指定 qualifier，返回新快照。
+         *
+         * @param qualifier 要移除的映射 qualifier
+         * @return 移除后的新快照；无命中时返回当前快照本身
+         */
+        fun removeByQualifier(qualifier: String): SideSnapshot {
+            if (!byQualifier.containsKey(qualifier)) return this
+            return SideSnapshot(byQualifier - qualifier)
+        }
+
+        companion object {
+            val EMPTY = SideSnapshot()
+        }
+    }
 
     /**
-     * Controller 侧映射缓存，key 为 HttpMappingInfo.qualifier
+     * 客户端侧缓存快照，整体原子替换，读侧无需加锁
      **/
-    private val controllerMappings: MutableMap<String, HttpMappingInfo> = ConcurrentHashMap()
+    @Volatile
+    private var clientSide: SideSnapshot = SideSnapshot.EMPTY
+
+    /**
+     * Controller 侧缓存快照，整体原子替换，读侧无需加锁
+     **/
+    @Volatile
+    private var controllerSide: SideSnapshot = SideSnapshot.EMPTY
+
+    /**
+     * 增量写入锁，保证并发 upsert / remove 时快照更新不丢失。
+     * 全量 replace 不参与该锁，后到的 replace 直接覆盖即可。
+     **/
+    private val mutationLock = Any()
 
     private val controllerRefreshLock = Any()
     private var controllerRefreshJob: Job? = null
     private val controllerRefreshGeneration = AtomicLong()
 
     /**
-     * 全量重建客户端侧缓存。
+     * 全量重建客户端侧缓存，整体原子替换，不存在清空后的空窗期。
      *
      * @param mappings 新的客户端映射集合
      */
     fun replaceClient(mappings: Collection<HttpMappingInfo>) {
-        clientMappings.clear()
-        for (info in mappings) {
-            clientMappings[info.qualifier] = info
-        }
+        clientSide = SideSnapshot(mappings.associateBy { it.qualifier })
     }
 
     /**
-     * 全量重建 Controller 侧缓存。
+     * 全量重建 Controller 侧缓存，整体原子替换，不存在清空后的空窗期。
      *
      * @param mappings 新的 Controller 映射集合
      */
     fun replaceController(mappings: Collection<HttpMappingInfo>) {
-        controllerMappings.clear()
-        for (info in mappings) {
-            controllerMappings[info.qualifier] = info
-        }
+        controllerSide = SideSnapshot(mappings.associateBy { it.qualifier })
     }
 
     /**
@@ -79,8 +143,13 @@ class BilateralMappingCacheService(
      * @param info 单条映射
      */
     fun upsert(info: HttpMappingInfo) {
-        val map = if (info.kind == EndpointKind.CONTROLLER) controllerMappings else clientMappings
-        map[info.qualifier] = info
+        synchronized(mutationLock) {
+            if (info.kind == EndpointKind.CONTROLLER) {
+                controllerSide = controllerSide.plus(info)
+            } else {
+                clientSide = clientSide.plus(info)
+            }
+        }
     }
 
     /**
@@ -92,8 +161,10 @@ class BilateralMappingCacheService(
         val key = readAction {
             if (method.isValid) HttpMappingInfo.qualifierOf(method) else null
         } ?: return
-        clientMappings.remove(key)
-        controllerMappings.remove(key)
+        synchronized(mutationLock) {
+            clientSide = clientSide.removeByQualifier(key)
+            controllerSide = controllerSide.removeByQualifier(key)
+        }
     }
 
     /**
@@ -103,8 +174,10 @@ class BilateralMappingCacheService(
      */
     fun removeByClassQualifiedName(qualifiedName: String) {
         val prefix = "$qualifiedName#"
-        clientMappings.keys.removeIf { it.startsWith(prefix) }
-        controllerMappings.keys.removeIf { it.startsWith(prefix) }
+        synchronized(mutationLock) {
+            clientSide = clientSide.removeByQualifierPrefix(prefix)
+            controllerSide = controllerSide.removeByQualifierPrefix(prefix)
+        }
     }
 
     /**
@@ -120,7 +193,7 @@ class BilateralMappingCacheService(
         if (!readAction { clientMethod.isValid }) return false
         val source = resolveClientSource(clientMethod) ?: return false
         return readAction {
-            controllerMappings.values.any { it.matches(source) && it.resolveMethod() != null }
+            controllerSide.candidatesOf(source).any { it.matches(source) && it.resolveMethod() != null }
         }
     }
 
@@ -137,7 +210,7 @@ class BilateralMappingCacheService(
         if (!readAction { controllerMethod.isValid }) return false
         val source = resolveControllerSource(controllerMethod) ?: return false
         return readAction {
-            clientMappings.values.any { it.matches(source) && it.resolveMethod() != null }
+            clientSide.candidatesOf(source).any { it.matches(source) && it.resolveMethod() != null }
         }
     }
 
@@ -155,7 +228,7 @@ class BilateralMappingCacheService(
         if (source == null) {
             val key = readAction { HttpMappingInfo.qualifierOf(clientMethod) }
             source = readAction {
-                clientMappings[key]?.takeIf { it.resolveMethod() != null }
+                clientSide.byQualifier[key]?.takeIf { it.resolveMethod() != null }
             }
         }
 
@@ -175,9 +248,9 @@ class BilateralMappingCacheService(
 
         upsert(source)
         val targets = readAction {
-            controllerMappings.values.filter { it.matches(source) && it.resolveMethod() != null }
+            controllerSide.candidatesOf(source).filter { it.matches(source) && it.resolveMethod() != null }
         }
-        if (targets.isNotEmpty() || controllerMappings.isNotEmpty()) return targets
+        if (targets.isNotEmpty() || controllerSide.byQualifier.isNotEmpty()) return targets
 
         val manualProfile = ApiHelperSettings.getInstance().state.manualActiveProfile
         val scanned = EndpointScanner.scanControllerEndpoints(project, manualProfile)
@@ -203,7 +276,7 @@ class BilateralMappingCacheService(
         if (source == null) {
             val key = readAction { HttpMappingInfo.qualifierOf(controllerMethod) }
             source = readAction {
-                controllerMappings[key]?.takeIf { it.resolveMethod() != null }
+                controllerSide.byQualifier[key]?.takeIf { it.resolveMethod() != null }
             }
         }
 
@@ -224,9 +297,9 @@ class BilateralMappingCacheService(
 
         upsert(source)
         val targets = readAction {
-            clientMappings.values.filter { it.matches(source) && it.resolveMethod() != null }
+            clientSide.candidatesOf(source).filter { it.matches(source) && it.resolveMethod() != null }
         }
-        if (targets.isNotEmpty() || clientMappings.isNotEmpty()) return targets
+        if (targets.isNotEmpty() || clientSide.byQualifier.isNotEmpty()) return targets
 
         val scanned = EndpointScanner.scanClientEndpoints(project)
         if (scanned.isNotEmpty()) {
@@ -248,10 +321,10 @@ class BilateralMappingCacheService(
             if (method.isValid) HttpMappingInfo.qualifierOf(method) else null
         } ?: return null
         readAction {
-            clientMappings[key]?.takeIf { it.resolveMethod() != null }
+            clientSide.byQualifier[key]?.takeIf { it.resolveMethod() != null }
         }?.let { return it }
         readAction {
-            controllerMappings[key]?.takeIf { it.resolveMethod() != null }
+            controllerSide.byQualifier[key]?.takeIf { it.resolveMethod() != null }
         }?.let { return it }
         return computeFreshClientMapping(method) ?: computeFreshControllerMapping(method)
     }
@@ -262,7 +335,7 @@ class BilateralMappingCacheService(
      * @return 有效的客户端映射列表
      */
     fun getAllClientMappings(): List<HttpMappingInfo> = readAction {
-        clientMappings.values.filter { it.resolveMethod() != null }
+        clientSide.byQualifier.values.filter { it.resolveMethod() != null }
     }
 
     /**
@@ -271,15 +344,15 @@ class BilateralMappingCacheService(
      * @return 有效的 Controller 映射列表
      */
     fun getAllControllerMappings(): List<HttpMappingInfo> = readAction {
-        controllerMappings.values.filter { it.resolveMethod() != null }
+        controllerSide.byQualifier.values.filter { it.resolveMethod() != null }
     }
 
     /**
      * 清空缓存，通常仅在测试或异常恢复路径调用。
      */
     fun clear() {
-        clientMappings.clear()
-        controllerMappings.clear()
+        clientSide = SideSnapshot.EMPTY
+        controllerSide = SideSnapshot.EMPTY
     }
 
     /**
@@ -324,7 +397,7 @@ class BilateralMappingCacheService(
     private fun resolveClientSource(method: PsiMethod): HttpMappingInfo? {
         val key = readAction { HttpMappingInfo.qualifierOf(method) }
         readAction {
-            clientMappings[key]?.takeIf { it.resolveMethod() != null }
+            clientSide.byQualifier[key]?.takeIf { it.resolveMethod() != null }
         }?.let { return it }
         val fresh = computeFreshClientMapping(method) ?: return null
         upsert(fresh)
@@ -341,7 +414,7 @@ class BilateralMappingCacheService(
     private fun resolveControllerSource(method: PsiMethod): HttpMappingInfo? {
         val key = readAction { HttpMappingInfo.qualifierOf(method) }
         readAction {
-            controllerMappings[key]?.takeIf { it.resolveMethod() != null }
+            controllerSide.byQualifier[key]?.takeIf { it.resolveMethod() != null }
         }?.let { return it }
         val fresh = computeFreshControllerMapping(method) ?: return null
         upsert(fresh)

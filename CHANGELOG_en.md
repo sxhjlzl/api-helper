@@ -2,6 +2,23 @@
 
 All notable changes to the ApiHelper plugin are documented in this file. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] - 2026-08-26
+
+### Fixed
+
+- Fixed counterpart matching failing entirely in projects with a configured `server.servlet.context-path`: matching now uses the relative path without the context-path, while display and copy keep the full URL.
+- Fixed matching failures when path variable names differ between the two sides (e.g. `{id}` vs `{userId}`): path variables are now normalized before comparison.
+- Fixed a brief empty-cache window during full cache rebuilds that caused gutter icon flicker or false "no counterpart" results: caches are now replaced atomically as immutable snapshots.
+- Fixed in-flight debug requests being impossible to cancel: the send button turns into "Stop" while sending and can abort the request.
+- Fixed debug requests ignoring the IDE proxy, which broke corporate network environments: requests now follow the IDE global HTTP proxy settings.
+- Fixed hardcoded debug timeouts: connect timeout and overall request timeout are now configurable under Settings → Tools → ApiHelper.
+
+### Improved
+
+- Counterpart matching queries now use an inverted index keyed by normalized path, reducing per-query cost from O(N) to O(1) and improving LineMarker rendering in large projects.
+- Incremental cache rebuilds triggered by rapid typing are now debounced and merged into a single background rebuild per window.
+- In-flight debug requests are cancelled automatically when the debug panel is disposed.
+
 ## [1.0.2] - 2026-06-24
 
 ### Added
@@ -52,6 +69,7 @@ All notable changes to the ApiHelper plugin are documented in this file. Version
 - Java and Kotlin source support
 - English and Simplified Chinese UI
 
+[1.0.3]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.3
 [1.0.2]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.2
 [1.0.1]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.1
 [1.0.0]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.0
