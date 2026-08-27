@@ -64,6 +64,91 @@ class HttpMappingInfoTest : BasePlatformTestCase() {
         )
     }
 
+    fun testMatchesUsesNormalizedMatchUrlInsteadOfDisplayUrl() {
+        val file = myFixture.configureByText(
+            "MatchController.java",
+            """
+                package example;
+
+                class MatchController {
+                    void list() {}
+                    void feignSide() {}
+                }
+            """.trimIndent(),
+        ) as PsiJavaFile
+        val methods = file.classes.single().methods
+
+        // Controller 侧展示 URL 含 context-path 前缀，匹配路径为去掉前缀的相对路径；
+        // 客户端侧展示 URL 本身就是相对路径，matchUrl 缺省从 url 归一化得到。
+        val controllerSide = readAction {
+            HttpMappingInfo.create(
+                url = "/gateway/user/list",
+                matchUrl = "/user/list",
+                httpMethod = HttpMethod.GET,
+                method = methods[0],
+                kind = EndpointKind.CONTROLLER,
+            )
+        }
+        val clientSide = readAction {
+            HttpMappingInfo.create(
+                url = "/user/list",
+                httpMethod = HttpMethod.GET,
+                method = methods[1],
+                kind = EndpointKind.FEIGN,
+            )
+        }
+
+        assertTrue(controllerSide.matches(clientSide))
+        assertEquals("/user/list", clientSide.matchUrl)
+    }
+
+    fun testMatchesRejectsDifferentMatchUrlOrHttpMethod() {
+        val file = myFixture.configureByText(
+            "MismatchController.java",
+            """
+                package example;
+
+                class MismatchController {
+                    void a() {}
+                    void b() {}
+                    void c() {}
+                }
+            """.trimIndent(),
+        ) as PsiJavaFile
+        val methods = file.classes.single().methods
+
+        val base = readAction {
+            HttpMappingInfo.create(
+                url = "/user/list",
+                matchUrl = "/user/list",
+                httpMethod = HttpMethod.GET,
+                method = methods[0],
+                kind = EndpointKind.CONTROLLER,
+            )
+        }
+        val differentPath = readAction {
+            HttpMappingInfo.create(
+                url = "/user/detail",
+                matchUrl = "/user/detail",
+                httpMethod = HttpMethod.GET,
+                method = methods[1],
+                kind = EndpointKind.FEIGN,
+            )
+        }
+        val differentMethod = readAction {
+            HttpMappingInfo.create(
+                url = "/user/list",
+                matchUrl = "/user/list",
+                httpMethod = HttpMethod.POST,
+                method = methods[2],
+                kind = EndpointKind.FEIGN,
+            )
+        }
+
+        assertFalse(base.matches(differentPath))
+        assertFalse(base.matches(differentMethod))
+    }
+
     private fun <T> readAction(block: () -> T): T =
         ApplicationManager.getApplication().runReadAction(Computable { block() })
 }

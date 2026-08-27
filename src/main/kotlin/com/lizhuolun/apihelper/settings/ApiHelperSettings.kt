@@ -32,6 +32,16 @@ class ApiHelperSettings : PersistentStateComponent<ApiHelperSettings.SettingsSta
          * 手动覆盖 Spring 激活的 profile，逗号分隔；为空表示自动从配置推断
          **/
         var manualActiveProfile: String = ""
+
+        /**
+         * 调试请求的连接超时，单位秒；范围 1-300，越界时由读取方自行夹取
+         **/
+        var connectTimeoutSeconds: Int = 30
+
+        /**
+         * 调试请求的整体超时，单位秒；范围 1-600
+         **/
+        var requestTimeoutSeconds: Int = 60
     }
 
     private var internalState: SettingsState = SettingsState()

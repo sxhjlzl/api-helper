@@ -3,6 +3,7 @@ package com.lizhuolun.apihelper.core
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.SmartPointerManager
 import com.intellij.psi.SmartPsiElementPointer
+import com.lizhuolun.apihelper.core.annotation.PathBuilder
 
 /**
  * HTTP 映射元数据，对应一个 Feign / Controller / HttpExchange 方法。
@@ -11,7 +12,10 @@ import com.intellij.psi.SmartPsiElementPointer
  * （仍处于 read action 内）一次性算好，不再以 getter 形式延迟访问 PSI，
  * 避免后续在协程外触发 "Read access is allowed from inside read-action only" 异常。
  *
- * @property url 已经拼接好的完整 URL（不含 host），例如 /api/user/info
+ * @property url 已经拼接好的完整 URL（不含 host），例如 /api/user/info；
+ *               Controller 侧含 context-path，仅用于展示与复制，不参与两端匹配
+ * @property matchUrl 两端匹配专用的归一化相对路径：不含 context-path，
+ *                    且路径变量统一归一化为 {}，构造时一次性计算，见 [PathBuilder.normalizeForMatch]
  * @property httpMethod HTTP 方法
  * @property methodPointer 关联方法的智能指针；解析指针时调用方必须自行持有 read action
  * @property kind 来源类型，决定后续匹配的对端
@@ -21,6 +25,7 @@ import com.intellij.psi.SmartPsiElementPointer
  */
 data class HttpMappingInfo(
     val url: String,
+    val matchUrl: String,
     val httpMethod: HttpMethod,
     val methodPointer: SmartPsiElementPointer<PsiMethod>,
     val kind: EndpointKind,
@@ -35,13 +40,14 @@ data class HttpMappingInfo(
     fun resolveMethod(): PsiMethod? = methodPointer.element?.takeIf { it.isValid }
 
     /**
-     * 判断两个映射是否可以匹配，HTTP 方法兼容 + URL 完全一致。
+     * 判断两个映射是否可以匹配：归一化相对路径一致 + HTTP 方法兼容。
+     * 使用 matchUrl 而非 url 比较，以容忍 context-path 差异与路径变量命名差异。
      *
      * @param other 另一侧映射
-     * @return 两侧 URL 相同且 HTTP 方法兼容时返回 true
+     * @return 两侧归一化路径相同且 HTTP 方法兼容时返回 true
      */
     fun matches(other: HttpMappingInfo): Boolean {
-        if (url != other.url) return false
+        if (matchUrl != other.matchUrl) return false
         return httpMethod == HttpMethod.ANY ||
                 other.httpMethod == HttpMethod.ANY ||
                 httpMethod == other.httpMethod
@@ -72,7 +78,9 @@ data class HttpMappingInfo(
          * 工厂方法，用 PsiMethod 构造 HttpMappingInfo，必须在 read action 内调用。
          * 这里集中计算 qualifier，避免在使用侧重复处理 PSI。
          *
-         * @param url 已拼接好的完整 URL
+         * @param url 已拼接好的完整 URL，Controller 侧含 context-path，用于展示与复制
+         * @param matchUrl 两端匹配专用的归一化相对路径，不含 context-path；
+         *                 为空时退化为对 url 做路径变量归一化，仅在无法拆分前缀的兼容场景使用
          * @param httpMethod HTTP 方法
          * @param method 关联方法
          * @param kind 端点类别
@@ -83,8 +91,10 @@ data class HttpMappingInfo(
             httpMethod: HttpMethod,
             method: PsiMethod,
             kind: EndpointKind,
+            matchUrl: String = PathBuilder.normalizeForMatch(url),
         ): HttpMappingInfo = HttpMappingInfo(
             url = url,
+            matchUrl = matchUrl,
             httpMethod = httpMethod,
             methodPointer = SmartPointerManager.getInstance(method.project)
                 .createSmartPsiElementPointer(method),

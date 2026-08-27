@@ -115,6 +115,7 @@ object EndpointScanner {
                 httpMethod = httpMethod,
                 method = method,
                 kind = kind,
+                matchUrl = PathBuilder.normalizeForMatch(PathBuilder.buildClientUrl(classPath, methodPath)),
             )
         }
         mappings
@@ -159,6 +160,9 @@ object EndpointScanner {
                 httpMethod = httpMethod,
                 method = method,
                 kind = EndpointKind.CONTROLLER,
+                // 匹配路径不含 context-path 与 mvc servlet path，保证与客户端侧可匹配；
+                // 变量名在客户端/服务端命名不一致时也通过归一化容忍。
+                matchUrl = PathBuilder.normalizeForMatch(PathBuilder.buildClientUrl(classPath, methodPath)),
             )
         }
         mappings

@@ -155,6 +155,50 @@ class BilateralMappingCacheServiceTest : BasePlatformTestCase() {
         assertFalse(cache.hasClientCounterpart(controllerMethod))
     }
 
+    fun testHasControllerCounterpartMatchesWhenPathVariableNamesDiffer() {
+        addSpringAnnotations()
+
+        myFixture.configureByText(
+            "DemoController.java",
+            """
+                package example;
+
+                import org.springframework.web.bind.annotation.GetMapping;
+                import org.springframework.web.bind.annotation.RestController;
+
+                @RestController
+                class DemoController {
+                    @GetMapping("/api/user/{userId}")
+                    String find() {
+                        return "ok";
+                    }
+                }
+            """.trimIndent(),
+        )
+        val feignFile = myFixture.configureByText(
+            "DemoClient.java",
+            """
+                package example;
+
+                import org.springframework.cloud.openfeign.FeignClient;
+                import org.springframework.web.bind.annotation.GetMapping;
+
+                @FeignClient(name = "demo")
+                interface DemoClient {
+                    @GetMapping("/api/user/{id}")
+                    String find();
+                }
+            """.trimIndent(),
+        ) as PsiJavaFile
+
+        val cache = BilateralMappingCacheService.of(project)
+        cache.clear()
+        cache.replaceController(EndpointScanner.scanControllerEndpoints(project, null))
+
+        val feignMethod = feignFile.classes.single().methods.single()
+        assertTrue(cache.hasControllerCounterpart(feignMethod))
+    }
+
     fun testFindControllerTargetsFallsBackToProjectScanWhenControllerCacheIsEmpty() {
         myFixture.addFileToProject(
             "org/springframework/web/bind/annotation/RestController.java",

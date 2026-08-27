@@ -13,6 +13,7 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import com.intellij.util.proxy.CommonProxy
 import com.lizhuolun.apihelper.ApiHelperBundle
 import com.lizhuolun.apihelper.config.ApplicationConfigReader
 import com.lizhuolun.apihelper.core.HttpMethod
@@ -27,8 +28,12 @@ import java.awt.Component
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Font
+import java.io.IOException
 import java.io.InputStream
 import java.net.HttpCookie
+import java.net.Proxy
+import java.net.ProxySelector
+import java.net.SocketAddress
 import java.net.http.HttpHeaders
 import java.net.URI
 import java.net.URLEncoder
@@ -38,6 +43,8 @@ import java.net.http.HttpResponse
 import java.nio.file.Path
 import java.nio.charset.StandardCharsets
 import java.time.Duration
+import java.util.concurrent.CancellationException
+import java.util.concurrent.CompletableFuture
 import javax.swing.BorderFactory
 import javax.swing.ButtonGroup
 import javax.swing.DefaultCellEditor
@@ -63,10 +70,24 @@ import javax.swing.table.TableCellRenderer
 class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private val log = thisLogger()
-    private val httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(30))
-        .followRedirects(HttpClient.Redirect.NORMAL)
-        .build()
+
+    /**
+     * HttpClient 按当前配置的连接超时懒加载缓存，超时配置变更后重建；
+     * 代理选择器对接 IDE 全局代理配置，保证企业内网环境可达。
+     **/
+    private var cachedHttpClient: HttpClient? = null
+    private var cachedHttpClientConnectTimeout: Int = -1
+
+    /**
+     * 当前在途请求的 Future，用于支持手动取消；为 null 表示空闲。
+     **/
+    @Volatile
+    private var currentRequestFuture: CompletableFuture<HttpResponse<InputStream>>? = null
+
+    /**
+     * 是否正在发送请求，决定主按钮显示"发送"还是"停止"。
+     **/
+    private var isSending = false
 
     private val methodBox = ComboBox(arrayOf("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS")).apply {
         selectedItem = "GET"
@@ -77,7 +98,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         ApiHelperUiStyle.applyTextField(this)
     }
     private val sendButton = SendButton(ApiHelperBundle.message("debug.action.send")).apply {
-        addActionListener { sendRequest() }
+        addActionListener { onPrimaryAction() }
     }
     private val requestStatusLabel = JBLabel(ApiHelperBundle.message("debug.status.ready")).apply {
         border = BorderFactory.createEmptyBorder(3, 0, 0, 0)
@@ -416,6 +437,23 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             lineWrap = false
         }
 
+    /**
+     * 主按钮点击入口：空闲时发送请求，发送中则取消在途请求。
+     */
+    private fun onPrimaryAction() {
+        if (isSending) {
+            currentRequestFuture?.cancel(true)
+            return
+        }
+        sendRequest()
+    }
+
+    override fun removeNotify() {
+        super.removeNotify()
+        // 面板销毁时主动取消在途请求，避免后台线程继续占用连接
+        currentRequestFuture?.cancel(true)
+    }
+
     private fun sendRequest() {
         val input = DebugRequestInput(
             method = methodBox.selectedItem?.toString().orEmpty(),
@@ -431,7 +469,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             urlEncoded = urlEncodedModel.toPairs(),
         )
 
-        sendButton.isEnabled = false
+        enterSendingState()
         requestStatusLabel.text = ApiHelperBundle.message("debug.status.sending")
         requestStatusLabel.foreground = UIUtil.getContextHelpForeground()
         lastResponseBody = ""
@@ -443,11 +481,15 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             val started = System.nanoTime()
             try {
                 val request = buildRequest(input)
-                val response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream())
+                // sendAsync 返回的 Future 支持 cancel，取消时会中止底层 HTTP 交换
+                val future = httpClient().sendAsync(request, HttpResponse.BodyHandlers.ofInputStream())
+                currentRequestFuture = future
+                val response = future.join()
                 val responseBody = response.body().use(::readLimitedText)
                 val elapsedMs = Duration.ofNanos(System.nanoTime() - started).toMillis()
                 ApplicationManager.getApplication().invokeLater {
                     if (project.isDisposed) return@invokeLater
+                    exitSendingState()
                     showResponse(
                         statusCode = response.statusCode(),
                         headers = response.headers(),
@@ -456,29 +498,108 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                         elapsedMs = elapsedMs,
                     )
                     contentTabs.selectedIndex = 1
-                    sendButton.isEnabled = true
                 }
             } catch (e: Exception) {
                 val elapsedMs = Duration.ofNanos(System.nanoTime() - started).toMillis()
-                log.warn("ApiHelper: 接口调试请求失败, url=${input.url}", e)
+                val cancelled = isCancellation(e)
+                if (!cancelled) {
+                    log.warn("ApiHelper: 接口调试请求失败, url=${input.url}", e)
+                }
                 ApplicationManager.getApplication().invokeLater {
                     if (project.isDisposed) return@invokeLater
-                    requestStatusLabel.text = ApiHelperBundle.message("debug.status.failed", elapsedMs)
-                    requestStatusLabel.foreground = UIUtil.getErrorForeground()
-                    lastResponseBody = e.message ?: e::class.java.name
-                    renderResponseBody()
-                    contentTabs.selectedIndex = 1
-                    sendButton.isEnabled = true
+                    exitSendingState()
+                    if (cancelled) {
+                        // 用户主动取消属于正常操作，不走错误展示
+                        requestStatusLabel.text = ApiHelperBundle.message("debug.status.cancelled")
+                        requestStatusLabel.foreground = UIUtil.getContextHelpForeground()
+                    } else {
+                        requestStatusLabel.text = ApiHelperBundle.message("debug.status.failed", elapsedMs)
+                        requestStatusLabel.foreground = UIUtil.getErrorForeground()
+                        lastResponseBody = e.message ?: e::class.java.name
+                        renderResponseBody()
+                        contentTabs.selectedIndex = 1
+                    }
                 }
             }
+        }
+    }
+
+    /**
+     * 进入发送中状态，主按钮切换为"停止"，支持取消在途请求。
+     */
+    private fun enterSendingState() {
+        isSending = true
+        sendButton.text = ApiHelperBundle.message("debug.action.stop")
+        sendButton.icon = AllIcons.Actions.Suspend
+    }
+
+    /**
+     * 退出发送中状态，恢复主按钮为"发送"并清理在途请求引用。
+     */
+    private fun exitSendingState() {
+        isSending = false
+        currentRequestFuture = null
+        sendButton.text = ApiHelperBundle.message("debug.action.send")
+        sendButton.icon = AllIcons.Actions.Execute
+    }
+
+    /**
+     * 获取按当前配置构建的 HttpClient；连接超时变更后重建，代理始终跟随 IDE 全局配置。
+     *
+     * @return 可复用的 HttpClient 实例
+     */
+    private fun httpClient(): HttpClient {
+        val connectTimeout = ApiHelperSettings.getInstance().state.connectTimeoutSeconds
+            .coerceIn(CONNECT_TIMEOUT_MIN_SECONDS, CONNECT_TIMEOUT_MAX_SECONDS)
+        val cached = cachedHttpClient
+        if (cached != null && cachedHttpClientConnectTimeout == connectTimeout) {
+            return cached
+        }
+        val client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(connectTimeout.toLong()))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .proxy(IdeProxySelector)
+            .build()
+        cachedHttpClient = client
+        cachedHttpClientConnectTimeout = connectTimeout
+        return client
+    }
+
+    /**
+     * 判断异常链是否由取消引起，取消不作为失败处理。
+     *
+     * @param error 发送或读取响应过程中抛出的异常
+     * @return 异常链中包含 CancellationException 时返回 true
+     */
+    private fun isCancellation(error: Throwable): Boolean {
+        var current: Throwable? = error
+        while (current != null) {
+            if (current is CancellationException) return true
+            current = current.cause
+        }
+        return false
+    }
+
+    /**
+     * 代理选择器，对接 IDE 全局代理配置（Settings -> Appearance & Behavior -> System Settings -> HTTP Proxy）。
+     */
+    private object IdeProxySelector : ProxySelector() {
+
+        override fun select(uri: URI): List<Proxy> =
+            runCatching { CommonProxy.getInstance().select(uri) }.getOrDefault(emptyList())
+
+        override fun connectFailed(uri: URI, socketAddress: SocketAddress, exception: IOException) {
+            // 交由 Java HttpClient 内置的重试与直连回退处理，不做额外干预
         }
     }
 
     private fun buildRequest(input: DebugRequestInput): HttpRequest {
         val method = input.method.ifBlank { "GET" }.uppercase()
         val requestUri = URI.create(appendQuery(applyPathParams(normalizeInitialUrl(input.url, currentServerPort), input.path), input.query))
+        val requestTimeout = ApiHelperSettings.getInstance().state.requestTimeoutSeconds
+            .coerceIn(REQUEST_TIMEOUT_MIN_SECONDS, REQUEST_TIMEOUT_MAX_SECONDS)
         val builder = HttpRequest.newBuilder(requestUri)
-            .timeout(Duration.ofSeconds(60))
+            .timeout(Duration.ofSeconds(requestTimeout.toLong()))
 
         for ((name, value) in input.headers) {
             if (name.isNotBlank()) builder.setHeader(name, value)
@@ -935,6 +1056,10 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         private const val DEFAULT_SERVER_PORT = 8080
         private const val MB = 1024 * 1024
         private const val MAX_RESPONSE_PREVIEW_BYTES = 5 * MB
+        private const val CONNECT_TIMEOUT_MIN_SECONDS = 1
+        private const val CONNECT_TIMEOUT_MAX_SECONDS = 300
+        private const val REQUEST_TIMEOUT_MIN_SECONDS = 1
+        private const val REQUEST_TIMEOUT_MAX_SECONDS = 600
 
         private fun chooseLocalFile(): String? {
             val chooser = JFileChooser()

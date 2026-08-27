@@ -2,6 +2,23 @@
 
 本文件记录 ApiHelper 插件的版本变更。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.0.3] - 2026-08-26
+
+### 修复
+
+- 修复配置了 `server.servlet.context-path` 的工程两端永远无法匹配的问题：两端匹配改用不含 context-path 的相对路径，展示与复制仍保留完整 URL。
+- 修复两端路径变量命名不一致（如 `{id}` 与 `{userId}`）时匹配失败的问题：路径变量统一归一化后再比较。
+- 修复缓存全量重建瞬间出现空窗期，导致 gutter 图标闪烁或跳转误报无对端的问题：改为不可变快照整体原子替换。
+- 修复调试页请求发出后无法取消、只能等待超时的问题：发送中按钮变为"停止"，可随时中止在途请求。
+- 修复调试请求不走 IDE 代理导致企业内网环境不可达的问题：现跟随 IDE 全局 HTTP 代理配置。
+- 修复调试请求超时硬编码的问题：连接超时与整体超时移至 Settings → Tools → ApiHelper 配置。
+
+### 优化
+
+- 两端匹配查询改为基于归一化路径的倒排索引，单次查询由 O(N) 降为 O(1)，提升大型工程 LineMarker 渲染性能。
+- 连续输入触发的 PSI 增量缓存重建合并防抖，同一窗口期内的变更只执行一次后台重建。
+- 调试面板销毁时自动取消在途请求，避免后台线程继续占用连接。
+
 ## [1.0.2] - 2026-06-24
 
 ### 新增
@@ -52,6 +69,7 @@
 - 支持 Java 与 Kotlin 源码
 - 支持中英双语界面
 
+[1.0.3]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.3
 [1.0.2]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.2
 [1.0.1]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.1
 [1.0.0]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.0
