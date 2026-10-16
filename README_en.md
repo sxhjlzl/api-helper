@@ -1,115 +1,119 @@
 <p align="center">
-  <img src="docs/images/cover.png" alt="ApiHelper Cover" width="100%">
+  <img src="docs/images/cover.png" alt="ApiHelper" width="100%">
+</p>
+
+<h3 align="center">All-in-One Spring API Navigation, Documentation &amp; Debugging Assistant for IntelliJ IDEA</h3>
+
+<p align="center">
+  <a href="https://plugins.jetbrains.com/plugin/32327-apihelper"><img src="https://img.shields.io/jetbrains/plugin/v/32327-apihelper?style=flat-square&label=Marketplace&color=0ea5e9" alt="Marketplace Version"></a>
+  <a href="https://plugins.jetbrains.com/plugin/32327-apihelper"><img src="https://img.shields.io/jetbrains/plugin/d/32327-apihelper?style=flat-square&label=Downloads&color=2563eb" alt="Downloads"></a>
+  <img src="https://img.shields.io/badge/IDEA-2024.3%2B-10b981?style=flat-square" alt="IDEA 2024.3+">
+  <a href="https://github.com/sxhjlzl/api-helper/blob/main/LICENSE"><img src="https://img.shields.io/github/license/sxhjlzl/api-helper?style=flat-square&color=64748b" alt="License"></a>
+  <a href="https://github.com/sxhjlzl/api-helper/stargazers"><img src="https://img.shields.io/github/stars/sxhjlzl/api-helper?style=flat-square&color=f59e0b" alt="GitHub Stars"></a>
 </p>
 
 <p align="center">
-  <a href="https://plugins.jetbrains.com/plugin/32327-apihelper"><img src="https://img.shields.io/jetbrains/plugin/v/32327-apihelper?label=Marketplace&color=0ea5e9" alt="JetBrains Marketplace version"></a>
-  <a href="https://plugins.jetbrains.com/plugin/32327-apihelper"><img src="https://img.shields.io/jetbrains/plugin/d/32327-apihelper?label=Downloads&color=2563eb" alt="JetBrains Marketplace downloads"></a>
-  <a href="https://github.com/sxhjlzl/api-helper/blob/main/LICENSE"><img src="https://img.shields.io/github/license/sxhjlzl/api-helper?color=10b981" alt="License"></a>
-  <a href="https://github.com/sxhjlzl/api-helper/stargazers"><img src="https://img.shields.io/github/stars/sxhjlzl/api-helper?style=social" alt="GitHub stars"></a>
-</p>
-
-<p align="center">
-  <a href="https://plugins.jetbrains.com/plugin/32327-apihelper">JetBrains Marketplace</a>
-  ·
-  <a href="./CHANGELOG_en.md">Changelog</a>
-  ·
-  <a href="https://github.com/sxhjlzl/api-helper/issues">Report an Issue</a>
-  ·
-  <a href="./README.md">简体中文</a>
+  <a href="https://plugins.jetbrains.com/plugin/32327-apihelper"><b>Marketplace</b></a>
+  &nbsp;·&nbsp;
+  <a href="./CHANGELOG_en.md"><b>Changelog</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/sxhjlzl/api-helper/issues"><b>Issues</b></a>
+  &nbsp;·&nbsp;
+  <a href="./README.md"><b>简体中文</b></a>
 </p>
 
 ---
 
-**ApiHelper** is an all-in-one IntelliJ IDEA assistant for **Spring MVC Controllers**, **Spring Cloud OpenFeign**, and **Spring 6 `@HttpExchange`** declarative HTTP clients. It brings **bidirectional source navigation**, **global endpoint search**, **multi-environment API debugging**, **cURL export**, and **Markdown API documentation generation** directly into your IDE.
+**ApiHelper** is built for developers working with **Spring MVC**, **Spring Cloud OpenFeign**, and **Spring 6 `@HttpExchange`**. It brings endpoint discovery, bidirectional source navigation, Markdown API documentation, cURL export, and multi-environment HTTP debugging straight into IntelliJ IDEA—eliminating constant context switching.
 
-## Key Highlights
+## Core Capabilities
 
-### 1. Bidirectional Gutter Navigation & Global Endpoint Search
+| Module | Highlights |
+| :--- | :--- |
+| **Bidirectional Gutter Navigation** | One-click jump between `@RestController` and `@FeignClient` / `@HttpExchange` methods; tolerates differing path variable names (`{id}` vs `{orderId}`) and recognizes custom composite meta-annotations (e.g. `@ApiV1RestController`). |
+| **Global Endpoint Search** | Press `Ctrl + Alt + \` (`Cmd + Opt + \` on macOS) anywhere to search across HTTP methods, URLs, methods, classes, and modules: `Enter` jumps to source, `Shift + Enter` jumps to counterpart, `Ctrl/Cmd + Enter` opens the debugger. |
+| **5-Tab Native Workspace** | Native top-level tabs for **Interfaces**, **Debug**, **Base URL**, **History**, and **Global Params**. **Interfaces** supports module grouping and orphan endpoint filtering; **Debug** features a vertical Request/Response split with line-numbered code areas. |
+| **Smart API Debugger** | Auto-prefills Path / Query / Header / Cookie parameters and **recursively expands nested DTOs & `List<T>` into JSON drafts** (honoring `@JsonProperty` and `@Schema(example)`); includes environment switching, draft persistence, 30-request history replay, and streaming file uploads. |
+| **cURL & Markdown Docs** | One-click export of ready-to-run **cURL commands** (with active Base URL and global headers) and standard **Markdown API docs** (extracting Javadocs, `@param`, and Swagger annotations, and expanding generic wrappers like `DllResult<T>` and `DllPageResult<T>`). |
+| **Spring Config Aware** | Automatically resolves `application.yml`, `bootstrap.yml`, and `application-{profile}.yml` for `server.port`, `context-path`, `servlet.path`, and `${var:default}` placeholders; supports both **Java & Kotlin** via UAST. |
 
-<p align="center">
-  <img src="docs/images/feature-navigation.png" alt="Bidirectional Gutter Navigation and Global Search" width="100%">
-</p>
+---
 
-- **Controller ↔ Feign / HttpExchange Navigation**: Left-click the editor gutter icon to jump between client declarations and Controller methods, even when path variable names differ (`{id}` vs `{orderId}`) or custom composite meta-annotations (e.g. `@ApiV1RestController`) are used.
-- **Controller Gutter Context Menu**: Right-click any Controller gutter icon to **Debug endpoint**, **Copy URL**, **Copy as cURL**, or **Copy API Docs** directly from the editor.
-- **Global Search API Endpoint Popup (`Ctrl+Alt+\` / `Cmd+Opt+\`)**: Invoke `Navigate → Search API Endpoint...` from anywhere:
-  - `Enter`: Jump to endpoint source code
-  - `Shift + Enter`: Jump directly to the counterpart endpoint
-  - `Ctrl / Cmd + Enter`: Open the endpoint in the API debugger
+## Quick Start
 
-### 2. Multi-Tab & Collapsible Split Workspace
+### 1. Installation
 
-<p align="center">
-  <img src="docs/images/feature-workspace.png" alt="Multi-Tab and Collapsible Workspace" width="100%">
-</p>
+- **From JetBrains Marketplace (Recommended)**: Open `Settings` → `Plugins` → `Marketplace` in IDEA, search for **ApiHelper**, and click **Install**, or visit [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/32327-apihelper).
+- **From Disk**: Run `./gradlew :buildPlugin` and install `build/distributions/api-helper-<version>.zip` via `Install Plugin from Disk...`.
 
-- **Four Native Top-Level Tabs**:
-  - **Interfaces**: Features a collapsible vertical split workspace with the endpoint tree on top and the **Debug** pane on the bottom (collapsed by default to maximize browsing space, and expanded automatically when debugging).
-  - **Base URL**: Manage multiple environment Base URLs (`Local`, `Dev`, `Staging`, `Prod`) in a visual table and switch the active environment with one click.
-  - **History**: Automatically records the last 30 debug requests and responses in the current session; double-click or press `Enter` on any entry to replay the full request and response.
-  - **Global Params**: Manage global common request headers (such as `Authorization: Bearer ...` and `X-Tenant-Id`) that are automatically merged into every debug request and exported cURL command.
-- **Module Grouping & Orphan Endpoint Detection**:
-  - Toggle **Group by Module** (`Module → Class → Endpoint`) and filter by **Pairing Status** (`All Endpoints` / `Paired Only` / `Unpaired (Orphan) Only`) to quickly spot unmatched Feign declarations.
-  - Includes **Select Opened Endpoint**, native `SearchTextField` (`ESC` to dismiss), and `TreeSpeedSearch`.
+### 2. Common Workflows
 
-### 3. Smart Nested JSON Drafts, cURL Export & Markdown API Docs
+| Workflow | Trigger | What It Does |
+| :--- | :--- | :--- |
+| **Search Any Endpoint** | `Ctrl + Alt + \` / `Cmd + Opt + \` | Multi-keyword search (e.g. `POST order`) to jump to source, counterpart, or debugger |
+| **Client ↔ Server Jump** | Click editor gutter icon | Left-click to jump to counterpart; right-click Controller gutter to debug or copy |
+| **Export cURL / API Docs** | Controller gutter / Tree context menu | Copies a standard `curl` command or Markdown documentation table to clipboard |
+| **Find Orphan Endpoints** | Toolbar `Filter by Pairing Status` | Filters `Unpaired (Orphan) Only` to spot Feign methods without a matching Controller |
+| **Switch Env & Global Token** | `Base URL` / `Global Params` tabs | Manage environment Base URLs and common headers (`Authorization`) in visual tables |
+| **Replay Debug History** | `History` tab / Debugger `History` button | Double-click any recent request to restore its parameters and response in the debugger |
 
-<p align="center">
-  <img src="docs/images/feature-debugger.png" alt="Smart JSON Drafts, cURL Export and Markdown Docs" width="100%">
-</p>
+---
 
-- **Recursive Nested JSON Drafts**: Automatically prefills Path, Query, Header, and Cookie parameters, and recursively expands nested DTOs and collections (`List<T>`) into formatted JSON request bodies—honoring `@JsonProperty` / `@SerializedName` / `@JSONField` names and `@Schema(example)` / `@ApiModelProperty(example)` / `@Parameter(example)` values.
-- **Per-Endpoint Draft Persistence**: Remembers modified parameters per endpoint across switches, with a one-click **Reset** button to restore defaults from source code.
-- **One-Click Markdown API Docs**: Extracts descriptions from Javadocs, `@param` tags, line comments, and Swagger/OpenAPI annotations; expands `@SpringQueryMap` / `@QueryMap` DTOs as well as generic response wrappers such as `DllResult<T>`, `DllPageResult<T>`, and `List<T>` (`data[].field`, `records[].field`).
-- **Production-Ready Debugger**: Supports `none`, `form-data` (streaming file uploads), `x-www-form-urlencoded`, `json`, `xml`, `raw`, and `binary` modes, in-flight request cancellation, IDE global HTTP proxy integration, configurable timeouts, and 5 MB response preview protection.
+## Settings
 
-## Installation
+Path: `Settings` → `Tools` → `ApiHelper`
 
-### Option 1: JetBrains Marketplace (Recommended)
+- **Spring Active Profile**: Override active profiles (e.g. `dev,test`), or leave empty for automatic detection.
+- **Connect & Request Timeouts**: Customize HTTP connect timeout (default `30s`) and request timeout (default `60s`), with automatic IDE HTTP proxy support.
+- **Environments & Global Headers**: Synced bidirectionally with the **Base URL** and **Global Params** tool window tabs.
 
-- Marketplace Page: [ApiHelper - JetBrains Marketplace](https://plugins.jetbrains.com/plugin/32327-apihelper)
-- In IntelliJ IDEA, go to `Settings` -> `Plugins` -> `Marketplace`, search for **ApiHelper**, and click **Install**.
+---
 
-### Option 2: Build from Source
+## Compatibility & Build
 
-```bash
-./gradlew :buildPlugin
-```
+| Item | Requirement |
+| :--- | :--- |
+| **Target IDE** | IntelliJ IDEA **2024.3+** (build 243+, verified compatible with **2026.3 EAP**) |
+| **Bundled Dependencies** | Java Plugin, Kotlin Plugin |
+| **Supported Frameworks** | Spring MVC · Spring Boot · Spring Cloud OpenFeign · Spring 6 `@HttpExchange` |
+| **Build Stack** | Kotlin 2.3.20 · JDK 21 · Gradle 9.5.0 · IntelliJ Platform Gradle Plugin 2.12.0 |
 
-Then install `build/distributions/api-helper-<version>.zip` via `Settings` -> `Plugins` -> `⚙️` -> `Install Plugin from Disk...`.
-
-## Shortcuts & Quick Actions
-
-| Action | Shortcut / Entry | Description |
-| --- | --- | --- |
-| Search API Endpoint | `Ctrl + Alt + \` (`Cmd + Opt + \` on macOS) | Multi-keyword search across HTTP method, URL, method name, class, and module |
-| Jump to Counterpart | Gutter left-click / Search popup `Shift + Enter` | Navigate between `@FeignClient` / `@HttpExchange` and `@RestController` |
-| Debug Endpoint | Controller gutter right-click / Tree right-click / `Cmd + Enter` | Expands the bottom debug split pane and prefills parameters & nested JSON body |
-| Copy as cURL | Controller gutter right-click / Tree right-click / Debugger `cURL` | Exports a standard `curl` command with active Base URL and global headers |
-| Copy API Docs | Controller gutter right-click / Tree right-click | Generates standard Markdown API documentation with nested request/response fields |
-| Select Opened Endpoint | Tool window toolbar `Select opened endpoint` | Locates and selects the endpoint at the current editor caret |
-
-## Compatibility & Tech Stack
-
-| Item | Details |
-| --- | --- |
-| Target IDE | IntelliJ IDEA 2024.3+ (build 243+, verified compatible with 2026.3 EAP) |
-| Required Plugins | Java (bundled), Kotlin (bundled) |
-| Source Languages | Java & Kotlin (powered by UAST) |
-| Frameworks | Spring MVC, Spring Cloud OpenFeign, Spring 6 `@HttpExchange` |
-| Build Stack | Kotlin 2.3.20 · JDK 21 · Gradle 9.5.0 · IntelliJ Platform Gradle Plugin 2.12.0 |
-
-## Development
+<details>
+<summary><b>Development Commands &amp; Project Structure (Click to expand)</b></summary>
 
 ```bash
-./gradlew :compileKotlin
-./gradlew :check :verifyPluginProjectConfiguration :verifyPluginStructure
+# Run compilation and unit tests
+./gradlew :check
+
+# Verify plugin configuration and structure
+./gradlew :verifyPluginProjectConfiguration :verifyPluginStructure
+
+# Build distributable plugin archive
 ./gradlew :buildPlugin
+
+# Launch sandbox IDE
 ./gradlew :runIde
 ```
 
-## Version & Feedback
+```text
+src/main/kotlin/com/lizhuolun/apihelper/
+├── ApiHelperBundle.kt        # Bilingual i18n resource bundle
+├── cache/                    # Inverted-index mapping cache & SmartPointer cache
+├── config/                   # Spring config reader, profile resolver & placeholder parser
+├── core/                     # HTTP mapping model, path builder & annotation parser
+├── listener/                 # Async startup warmup & debounced PSI listener
+├── provider/                 # Icons & Java/Kotlin bidirectional LineMarker providers
+├── scanner/                  # Index-backed project endpoint scanner
+├── settings/                 # Persistent settings state & Configurable UI
+└── ui/                       # Multi-tab tool window, endpoint tree, search popup & debugger
+```
 
-- Current version: `1.1.1` (see [CHANGELOG_en.md](./CHANGELOG_en.md))
-- Issues and feature requests are welcome at [GitHub Issues](https://github.com/sxhjlzl/api-helper/issues). If ApiHelper helps your daily workflow, please consider giving the repository a **Star**!
+</details>
+
+---
+
+## Feedback & Support
+
+- Current Version: **`1.1.1`** (see [CHANGELOG_en.md](./CHANGELOG_en.md) for full release notes)
+- Found a bug or have a feature request? Feel free to open an issue on [GitHub Issues](https://github.com/sxhjlzl/api-helper/issues).
+- If **ApiHelper** saves you time, a **Star** on GitHub is greatly appreciated!
