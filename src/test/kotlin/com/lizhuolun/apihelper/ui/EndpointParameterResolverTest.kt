@@ -365,6 +365,87 @@ class EndpointParameterResolverTest : BasePlatformTestCase() {
         assertEquals(listOf("Advertiser keyword.", "Current page number."), queryParams.map { it.description })
     }
 
+    fun testBuildsNestedJsonSampleWithJsonPropertyAndSchemaExample() {
+        myFixture.addFileToProject(
+            "com/fasterxml/jackson/annotation/JsonProperty.java",
+            """
+                package com.fasterxml.jackson.annotation;
+
+                public @interface JsonProperty {
+                    String value() default "";
+                }
+            """.trimIndent(),
+        )
+        myFixture.addFileToProject(
+            "io/swagger/v3/oas/annotations/media/Schema.java",
+            """
+                package io.swagger.v3.oas.annotations.media;
+
+                public @interface Schema {
+                    String description() default "";
+                    String example() default "";
+                }
+            """.trimIndent(),
+        )
+        val file = myFixture.configureByText(
+            "OrderController.java",
+            """
+                package example;
+
+                import com.fasterxml.jackson.annotation.JsonProperty;
+                import io.swagger.v3.oas.annotations.media.Schema;
+                import java.util.List;
+
+                class AddressDto {
+                    @Schema(example = "Shanghai")
+                    private String city;
+                }
+
+                class OrderItemDto {
+                    @JsonProperty("sku_code")
+                    @Schema(example = "SKU-001")
+                    private String skuCode;
+
+                    @Schema(example = "2")
+                    private Integer quantity;
+                }
+
+                class OrderCreateReq {
+                    @JsonProperty("order_no")
+                    @Schema(example = "ORD-2026")
+                    private String orderNo;
+
+                    private AddressDto address;
+
+                    private List<OrderItemDto> items;
+                }
+
+                class OrderController {
+                    Object create(OrderCreateReq req) {
+                        return null;
+                    }
+                }
+            """.trimIndent(),
+        ) as PsiJavaFile
+
+        val parameter = file.classes
+            .single { it.name == "OrderController" }
+            .methods
+            .single()
+            .parameterList
+            .parameters
+            .single()
+
+        val json = readAction {
+            EndpointParameterResolver.buildJsonSampleForParameters(listOf(parameter))
+        }
+
+        assertTrue(json.contains("\"order_no\": \"ORD-2026\""))
+        assertTrue(json.contains("\"city\": \"Shanghai\""))
+        assertTrue(json.contains("\"sku_code\": \"SKU-001\""))
+        assertTrue(json.contains("\"quantity\": 2"))
+    }
+
     private fun <T> readAction(action: () -> T): T =
         ApplicationManager.getApplication().runReadAction(Computable { action() })
 }

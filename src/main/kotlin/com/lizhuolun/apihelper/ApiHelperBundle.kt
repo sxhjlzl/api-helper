@@ -12,7 +12,7 @@ private const val BUNDLE = "messages.ApiHelperBundle"
  * messages/ApiHelperBundle.properties 为英文默认
  * messages/ApiHelperBundle_zh_CN.properties 为中文
  */
-object ApiHelperBundle : DynamicBundle(BUNDLE) {
+object ApiHelperBundle : DynamicBundle(ApiHelperBundle::class.java, BUNDLE) {
 
     @Nls
     fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): String =

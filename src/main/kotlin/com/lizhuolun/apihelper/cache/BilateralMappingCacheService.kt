@@ -181,6 +181,17 @@ class BilateralMappingCacheService(
     }
 
     /**
+     * 判断给定的 HttpMappingInfo 在对端缓存快照中是否存在匹配项（纯内存 O(1) 倒排查询）。
+     *
+     * @param info 当前端点映射
+     * @return 对端存在匹配项时返回 true
+     */
+    fun hasCounterpart(info: HttpMappingInfo): Boolean {
+        val opposite = if (info.kind == EndpointKind.CONTROLLER) clientSide else controllerSide
+        return opposite.candidatesOf(info).any { it.matches(info) }
+    }
+
+    /**
      * 判断给定的客户端方法是否存在匹配的 Controller 映射。
      *
      * 实现为仅查询缓存 + 对应当前方法做即时解析，不会触发全工程兜底扫描，

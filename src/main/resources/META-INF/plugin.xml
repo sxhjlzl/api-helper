@@ -43,6 +43,26 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.1.0</h3>
+        <ul>
+            <li>Redesigned the tool window workspace: top-level native tabs (<b>Interfaces</b>, <b>Base URL</b>, <b>History</b>, <b>Global Params</b>) and collapsible <b>Interfaces / Debug</b> split panes inside the main workspace.</li>
+            <li>Added global <b>Search API Endpoint</b> popup (<code>Navigate → Search API Endpoint...</code>, <code>Ctrl+Alt+\</code> / <code>Cmd+Opt+\</code>, and tool window header action): press <code>Enter</code> to jump to source, <code>Shift+Enter</code> to jump to counterpart, or <code>Ctrl/Cmd+Enter</code> to open in the debugger.</li>
+            <li>Added global common headers and multi-environment Base URL configuration under Settings → Tools → ApiHelper and dedicated tool window tabs, with an environment switcher in the API debugger.</li>
+            <li>Added one-click <b>Copy as cURL</b> in the endpoint tree context menu, Controller editor gutter menu, and API debugger, plus <b>Copy API Docs</b> directly in the Controller gutter menu.</li>
+            <li>Added project-level <b>Debug Draft Persistence &amp; Reset</b> per endpoint and <b>Debug Request History</b> (up to 30 recent requests with one-click replay of request and response).</li>
+            <li>Added <b>Group by Module</b> toggle, <b>Pairing Status Filter</b> (All / Paired Only / Unpaired Orphan Only), paired status indicators on tree nodes, and <b>Select Opened Endpoint</b> toolbar action.</li>
+            <li>Added recursive JSON request body generation for nested DTOs and collections, honoring <code>@JsonProperty</code> field names and <code>@Schema(example)</code> / <code>@ApiModelProperty(example)</code> values, plus custom composite meta-annotation (e.g. <code>@ApiRestController</code>) recognition.</li>
+        </ul>
+
+        <h3>1.0.4</h3>
+        <ul>
+            <li>Fixed deprecated IntelliJ Platform API usages (<code>CommonProxy</code> and <code>DynamicBundle(String)</code>) for full compatibility with IntelliJ IDEA 2026.3 EAP.</li>
+            <li>Upgraded tool window search bar to native <code>SearchTextField</code> with clear button and <code>ESC</code> shortcut to dismiss, plus <code>TreeSpeedSearch</code> type-to-filter on endpoint trees.</li>
+            <li>Added filtered/total endpoint counts on Controller and Feign tabs, and parameter counts on Debug request tabs (Query, Path, Headers, Cookies).</li>
+            <li>Added "Jump to Source" in endpoint tree context menus and unified balloon notifications for copy/navigation actions.</li>
+            <li>Improved API debugger UX: auto-commit table edits on focus loss, press <code>Enter</code> in URL field to send, semantic status code coloring, automatic response body type detection, and one-click response copy.</li>
+        </ul>
+
         <h3>1.0.3</h3>
         <ul>
             <li>Fixed counterpart matching failing entirely in projects with a configured <code>server.servlet.context-path</code>; matching now uses the relative path without the context-path.</li>
@@ -146,4 +166,15 @@
                 key="notification.group.name"/>
 
     </extensions>
+
+    <actions>
+        <action id="ApiHelper.GotoEndpoint"
+                class="com.lizhuolun.apihelper.ui.search.GotoEndpointAction"
+                icon="/icons/toolWindow.svg">
+            <add-to-group group-id="GoToTargetEx" anchor="last"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="control alt BACK_SLASH"/>
+            <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt BACK_SLASH"/>
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta alt BACK_SLASH"/>
+        </action>
+    </actions>
 </idea-plugin>
