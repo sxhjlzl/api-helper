@@ -168,6 +168,11 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
     private val contentTabs = JBTabbedPane()
     private var lastResponseBody: String = ""
 
+    /**
+     * 调试请求历史新增时的回调，用于通知顶部“请求历史”Tab 同步刷新。
+     */
+    var onHistoryUpdated: (() -> Unit)? = null
+
     init {
         border = BorderFactory.createEmptyBorder()
         add(buildRequestBar(), BorderLayout.NORTH)
@@ -352,7 +357,12 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             .showUnderneathOf(historyButton)
     }
 
-    private fun restoreHistoryEntry(entry: DebugHistoryEntry) {
+    /**
+     * 回放一条历史调试记录到面板中。
+     *
+     * @param entry 历史记录条目
+     */
+    fun restoreHistoryEntry(entry: DebugHistoryEntry) {
         val draft = entry.draft
         methodBox.selectedItem = draft.method.ifBlank { "GET" }
         urlField.text = draft.url
@@ -869,6 +879,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                                 responseCookies = "",
                             ),
                         )
+                        onHistoryUpdated?.invoke()
                         contentTabs.selectedIndex = 1
                     }
                 }
@@ -1032,6 +1043,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                 responseCookies = cookiesText,
             ),
         )
+        onHistoryUpdated?.invoke()
     }
 
     private fun renderResponseBody() {

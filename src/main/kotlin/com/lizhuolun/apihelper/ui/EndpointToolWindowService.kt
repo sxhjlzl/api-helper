@@ -1,15 +1,18 @@
 package com.lizhuolun.apihelper.ui
 
-import com.intellij.openapi.components.Service
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.ui.content.Content
 import com.lizhuolun.apihelper.cache.CacheChangeListener
 import com.lizhuolun.apihelper.core.HttpMappingInfo
+import com.lizhuolun.apihelper.ui.debug.EnvironmentManagePanel
+import com.lizhuolun.apihelper.ui.debug.GlobalParamsPanel
 
 /**
- * 工具窗口面板管理器，负责在 PSI 变更或缓存刷新时通知面板更新。
+ * 工具窗口面板管理器，负责在 PSI 变更、配置变更或缓存刷新时通知各面板更新。
  *
  * 由于面板可能尚未被创建（工具窗口未打开），这里使用可空引用，
  * 并在 [EndpointToolWindowFactory.createToolWindowContent] 中完成注册。
@@ -25,6 +28,15 @@ class EndpointToolWindowService(private val project: Project) {
     @Volatile
     private var panel: EndpointToolWindowPanel? = null
 
+    @Volatile
+    private var envPanel: EnvironmentManagePanel? = null
+
+    @Volatile
+    private var globalParamsPanel: GlobalParamsPanel? = null
+
+    @Volatile
+    private var mainContent: Content? = null
+
     init {
         project.messageBus.connect(project).subscribe(
             CacheChangeListener.TOPIC,
@@ -37,12 +49,23 @@ class EndpointToolWindowService(private val project: Project) {
     }
 
     /**
-     * 注册实际创建好的面板。
+     * 注册实际创建好的工具窗口面板与关联 Tab。
      *
-     * @param panel 工具窗口面板
+     * @param panel 接口主面板
+     * @param envPanel 前置 URL 管理面板
+     * @param globalParamsPanel 全局参数管理面板
+     * @param mainContent 接口主 Tab Content
      */
-    fun register(panel: EndpointToolWindowPanel) {
+    fun register(
+        panel: EndpointToolWindowPanel,
+        envPanel: EnvironmentManagePanel? = null,
+        globalParamsPanel: GlobalParamsPanel? = null,
+        mainContent: Content? = null,
+    ) {
         this.panel = panel
+        this.envPanel = envPanel
+        this.globalParamsPanel = globalParamsPanel
+        this.mainContent = mainContent
     }
 
     /**
@@ -54,26 +77,30 @@ class EndpointToolWindowService(private val project: Project) {
     }
 
     /**
-     * 重新加载调试面板的环境选择器配置。
+     * 重新加载调试面板与“前置 URL / 全局参数”Tab 的配置。
      */
     fun reloadDebugEnvironments() {
         if (project.isDisposed) return
         panel?.reloadDebugEnvironments()
+        envPanel?.loadFromSettings()
+        globalParamsPanel?.loadFromSettings()
     }
 
     /**
-     * 打开工具窗口并切换到指定 Controller 端点的调试页。
+     * 打开工具窗口，切换到“接口”主 Tab 并展开底部的“调试”面板加载指定端点。
      *
      * @param info Controller 端点映射
      */
     fun debugEndpoint(info: HttpMappingInfo) {
         if (project.isDisposed) return
+        val cache = com.lizhuolun.apihelper.cache.BilateralMappingCacheService.of(project)
         val item = ApplicationManager.getApplication().runReadAction(Computable {
             val method = info.resolveMethod() ?: return@Computable null
-            EndpointTreeItem.from(info, method)
+            EndpointTreeItem.from(info, method, hasCounterpart = cache.hasCounterpart(info))
         }) ?: return
         val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("ApiHelper")
         toolWindow?.show {
+            mainContent?.let { toolWindow.contentManager.setSelectedContent(it) }
             panel?.showDebugPanel(item)
         } ?: panel?.showDebugPanel(item)
     }

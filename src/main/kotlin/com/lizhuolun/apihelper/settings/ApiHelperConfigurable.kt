@@ -86,9 +86,7 @@ class ApiHelperConfigurable : Configurable {
             if (profileChanged) {
                 BilateralMappingCacheService.of(project).scheduleControllerRefresh(delayMillis = 0)
             }
-            if (envChanged) {
-                EndpointToolWindowService.of(project).reloadDebugEnvironments()
-            }
+            EndpointToolWindowService.of(project).reloadDebugEnvironments()
         }
     }
 

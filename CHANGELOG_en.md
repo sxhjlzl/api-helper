@@ -6,13 +6,18 @@ All notable changes to the ApiHelper plugin are documented in this file. Version
 
 ### Added
 
+- **Multi-Tab Tool Window & Collapsible Split Workspace**:
+  - Top-level native tool window tabs: **Interfaces**, **Base URL**, **History**, and **Global Params**, with dedicated visual tables for managing environment Base URLs, global headers, and request history.
+  - Collapsible vertical split workspace inside **Interfaces** (**Interfaces** on top + **Debug** on bottom); the debug pane starts collapsed to maximize endpoint browsing space and expands automatically when debugging an endpoint.
 - **Global Search API Endpoint Popup**: Added `Navigate → Search API Endpoint...` (`Ctrl+Alt+\` / `Cmd+Opt+\` and tool window header button) to search endpoints across the project with keyboard shortcuts (`Enter` to jump to source, `Shift+Enter` to jump to counterpart, `Ctrl/Cmd+Enter` to debug).
-- **Global Common Headers & Multi-Environment Base URLs**: Configure global common request headers (e.g. `Authorization`, `X-Tenant-Id`) and environment Base URLs (e.g. `Local`, `Dev`, `Test`) under Settings → Tools → ApiHelper, with a quick environment switcher in the API debugger.
+- **Global Common Headers & Multi-Environment Base URLs**: Configure global common request headers (e.g. `Authorization`, `X-Tenant-Id`) and environment Base URLs (e.g. `Local`, `Dev`, `Test`) under Settings → Tools → ApiHelper or the dedicated tool window tabs, with a quick environment switcher in the API debugger.
 - **Copy as cURL Everywhere & Gutter Copy API Docs**: Export standard `curl` commands from the endpoint tree context menu, Controller editor gutter menu, and the API debugger toolbar; also added "Copy API Docs" directly to the Controller gutter context menu.
 - **Debug Request History & Per-Endpoint Draft Persistence**: Record up to 30 recent debug requests and responses in the current project session for one-click replay, alongside automatic per-endpoint draft persistence and a "Reset" button.
 - **Group by Module & Pairing Status Filter**: Toggle `Module → Class` grouping, filter endpoints by pairing status (`All Endpoints` / `Paired Only` / `Unpaired (Orphan) Only`), and view pairing indicator icons directly on endpoint tree nodes.
 - **Select Opened Endpoint**: Added a toolbar action to locate and select the endpoint corresponding to the current editor caret position.
 - **Recursive Nested JSON Drafts, Annotation Examples & Composite Meta-Annotations**: Expand nested DTOs and collections (`List<T>`) into formatted JSON request bodies, honoring `@JsonProperty` / `@SerializedName` / `@JSONField` field names and `@Schema(example)` / `@ApiModelProperty(example)` / `@Parameter(example)` values, and recognize custom composite Spring meta-annotations (e.g. `@ApiV1RestController` annotated with `@RestController` and `@RequestMapping`).
+
+## [1.0.4] - 2026-10-15
 
 ### Fixed
 
@@ -25,7 +30,7 @@ All notable changes to the ApiHelper plugin are documented in this file. Version
 
 - Upgraded the tool window search bar to native `SearchTextField` (with built-in clear button and `ESC` to close) and enabled `TreeSpeedSearch` on endpoint trees.
 - Display `[filtered/total]` counts on `Controller` and `Feign / HttpExchange` tabs while filtering, and show active parameter counts on Debug request tabs (`Query`, `Path`, `Headers`, `Cookies`).
-- Added "Jump to Source" to endpoint tree context menus and unified balloon notifications for copying URLs, copying cURL commands, copying API docs, and counterpart navigation.
+- Added "Jump to Source" to endpoint tree context menus and unified balloon notifications for copying URLs, copying API docs, and counterpart navigation.
 - Enhanced API debugger UX: press `Enter` in the URL field to send, validate empty URLs and missing upload files before sending, colorize response status codes (`2xx`/`3xx`/`4xx-5xx`), auto-detect response body format from `Content-Type` and payload, and copy response bodies with one click.
 
 ## [1.0.3] - 2026-08-26
@@ -96,6 +101,7 @@ All notable changes to the ApiHelper plugin are documented in this file. Version
 - English and Simplified Chinese UI
 
 [1.1.0]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.1.0
+[1.0.4]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.4
 [1.0.3]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.3
 [1.0.2]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.2
 [1.0.1]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.1
