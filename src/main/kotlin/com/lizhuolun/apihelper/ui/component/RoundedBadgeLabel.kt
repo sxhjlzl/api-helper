@@ -30,9 +30,9 @@ class RoundedBadgeLabel(
 
     init {
         isOpaque = false
-        font = UIManager.getFont("Label.font")?.deriveFont(Font.PLAIN, 11f) ?: font.deriveFont(Font.PLAIN, 11f)
+        font = (UIManager.getFont("Label.font") ?: font).deriveFont(Font.PLAIN, 10f)
         foreground = foregroundColor ?: UIUtil.getLabelForeground()
-        border = JBUI.Borders.empty(1, 6)
+        border = JBUI.Borders.empty(1, 5)
     }
 
     override fun paintComponent(g: Graphics) {

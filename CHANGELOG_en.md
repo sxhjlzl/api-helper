@@ -2,6 +2,21 @@
 
 All notable changes to the ApiHelper plugin are documented in this file. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] - 2026-10-16
+
+### Improved
+
+- **Top-Level Native Debug Tab**: Promoted **Debug** to a first-level native tool window tab alongside **Interfaces**, **Base URL**, **History**, and **Global Params**, giving both the endpoint tree and the debugger full vertical space.
+- **Top-and-Bottom Request/Response Split Debugger**:
+  - Redesigned the debugger into a resizable vertical split with **Request** configuration on top (`Query` / `Body` / `Path` / `Headers` / `Cookies` rounded pill tabs) and **Response** display on the bottom (`Body` / `Cookies` / `Headers` pill tabs).
+  - Added per-row enable/disable checkboxes, select-all header checkboxes, and clean horizontal/vertical grid lines to parameter tables.
+  - Added a dedicated response action bar (**Clear**, **Toggle Soft Wrap**, **Save Response to File**, **Copy**, and format selector) and a synchronized left-hand **line-number gutter** for request and response code areas.
+- **Base URL Panel Iteration**: Switch the active environment directly via the first-column checkbox in the table (mutually exclusive, unchecking falls back to auto local port), view the active environment badge in the header, and add `Local / Dev / Test` templates with the **+ Presets** button.
+- **Global Params Panel Expansion**: Upgraded to three rounded pill sub-tabs (**Headers**, **Query**, **Cookies**) with persistent per-row enable/disable checkboxes, automatically merging enabled entries into all debug requests and exported cURL commands.
+- **History Panel Iteration**: Added a search filter bar, quick action buttons (**Replay**, **Copy as cURL**, **Delete Entry**, **Clear**), context menus, and a bottom live-preview split pane to inspect request/response details on single click.
+- **Redesigned Settings UI**: Organized `Settings → Tools → ApiHelper` into grouped sections with embedded visual tables for Base URLs and Global Parameters, plus a one-click **Restore Defaults** button.
+- **Compact Typography & Visual Polish**: Reduced global font sizes (`11pt` primary / `10.5pt` secondary) and control/row heights (`24-28px`), and refined `HttpMethodBadge` proportions and rounded tree selection highlights.
+
 ## [1.1.0] - 2026-10-16
 
 ### Added
@@ -100,6 +115,7 @@ All notable changes to the ApiHelper plugin are documented in this file. Version
 - Java and Kotlin source support
 - English and Simplified Chinese UI
 
+[1.1.1]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.1.1
 [1.1.0]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.1.0
 [1.0.4]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.4
 [1.0.3]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.3

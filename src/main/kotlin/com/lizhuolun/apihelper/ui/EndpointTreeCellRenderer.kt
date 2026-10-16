@@ -27,10 +27,11 @@ import javax.swing.UIManager
 import javax.swing.tree.TreeCellRenderer
 
 /**
- * IDE 原生风格的端点树渲染器。
+ * IDE 现代风格的端点树渲染器。
  *
- * - 类分组：左侧文件类型图标 + 包路径 + 类名高亮 + 右侧圆角数量徽章
- * - 端点叶子：左侧 HTTP 方法彩色徽章 + 中间 URL + 右侧方法名
+ * - 类/模块分组：左侧文件类型图标 + 弱化包路径 + 加粗类名 + 右侧圆角数量胶囊
+ * - 端点叶子：左侧等宽 HTTP 方法彩色胶囊 + 中间 URL + 右侧配对方向图标与方法名
+ * - 选中行采用带左右呼吸留白的圆角高亮条，贴合 JetBrains New UI 视觉风格
  *
  * @author lizhuolun
  * @date 2026/6/16
@@ -39,7 +40,7 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
 
     private val methodBadge = HttpMethodBadge(HttpMethod.GET)
     private val urlLabel = JLabel().apply {
-        font = UIManager.getFont("Label.font")?.deriveFont(Font.PLAIN, 12f) ?: font.deriveFont(Font.PLAIN, 12f)
+        font = UIManager.getFont("Label.font")?.deriveFont(Font.PLAIN, 11f) ?: font.deriveFont(Font.PLAIN, 11f)
         border = BorderFactory.createEmptyBorder(0, 0, 0, 0)
     }
     private val counterpartIconLabel = JLabel().apply {
@@ -47,7 +48,7 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
         isVisible = false
     }
     private val methodNameLabel = JLabel().apply {
-        font = UIManager.getFont("Label.font")?.deriveFont(Font.PLAIN, 11f) ?: font.deriveFont(Font.PLAIN, 11f)
+        font = UIManager.getFont("Label.font")?.deriveFont(Font.PLAIN, 10.5f) ?: font.deriveFont(Font.PLAIN, 10.5f)
         border = BorderFactory.createEmptyBorder(0, 0, 0, 0)
         horizontalAlignment = JLabel.RIGHT
     }
@@ -59,11 +60,11 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
 
     private val typeIconLabel = JLabel()
     private val packageLabel = JLabel().apply {
-        font = UIManager.getFont("Label.font")?.deriveFont(Font.PLAIN, 12f) ?: font.deriveFont(Font.PLAIN, 12f)
+        font = UIManager.getFont("Label.font")?.deriveFont(Font.PLAIN, 10.5f) ?: font.deriveFont(Font.PLAIN, 10.5f)
         border = BorderFactory.createEmptyBorder(0, 0, 0, 0)
     }
     private val classNameLabel = JLabel().apply {
-        font = UIManager.getFont("Label.font")?.deriveFont(Font.BOLD, 12f) ?: font.deriveFont(Font.BOLD, 12f)
+        font = UIManager.getFont("Label.font")?.deriveFont(Font.BOLD, 11f) ?: font.deriveFont(Font.BOLD, 11f)
         border = BorderFactory.createEmptyBorder(0, 0, 0, 0)
     }
     private val classPathPanel = JPanel(BorderLayout(0, 0)).apply {
@@ -73,17 +74,17 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
     }
     private val groupCountBadge = RoundedBadgeLabel()
 
-    private val endpointPanel = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
+    private val endpointPanel = JPanel(BorderLayout(JBUI.scale(6), 0)).apply {
         isOpaque = false
-        border = BorderFactory.createEmptyBorder(JBUI.scale(3), JBUI.scale(10), JBUI.scale(3), JBUI.scale(10))
+        border = BorderFactory.createEmptyBorder(JBUI.scale(3), JBUI.scale(8), JBUI.scale(3), JBUI.scale(10))
         add(methodBadge, BorderLayout.WEST)
         add(urlLabel, BorderLayout.CENTER)
         add(endpointRightPanel, BorderLayout.EAST)
     }
 
-    private val groupPanel = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
+    private val groupPanel = JPanel(BorderLayout(JBUI.scale(6), 0)).apply {
         isOpaque = false
-        border = BorderFactory.createEmptyBorder(JBUI.scale(4), JBUI.scale(10), JBUI.scale(4), JBUI.scale(10))
+        border = BorderFactory.createEmptyBorder(JBUI.scale(3), JBUI.scale(8), JBUI.scale(3), JBUI.scale(10))
         add(typeIconLabel, BorderLayout.WEST)
         add(classPathPanel, BorderLayout.CENTER)
         add(groupCountBadge, BorderLayout.EAST)
@@ -201,7 +202,7 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
         typeIconLabel.foreground = fg
 
         val countBg = UIManager.getColor("Button.background") ?: UIUtil.getPanelBackground()
-        val countFg = if (selected) fg else UIUtil.getLabelForeground()
+        val countFg = if (selected) fg else UIUtil.getContextHelpForeground()
         groupCountBadge.background = countBg
         groupCountBadge.foreground = countFg
     }
@@ -225,24 +226,35 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
             super.paintComponent(g)
             return
         }
-        val g2 = g as Graphics2D
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-        g2.color = background
-        g2.fillRoundRect(0, 0, width - 1, height - 1, JBUI.scale(4), JBUI.scale(4))
+        val g2 = g.create() as Graphics2D
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.color = background
+            val insetX = JBUI.scale(4)
+            val insetY = JBUI.scale(1)
+            val arc = JBUI.scale(6)
+            g2.fillRoundRect(
+                insetX,
+                insetY,
+                (width - insetX * 2).coerceAtLeast(1),
+                (height - insetY * 2).coerceAtLeast(1),
+                arc,
+                arc,
+            )
+        } finally {
+            g2.dispose()
+        }
     }
 
     override fun getPreferredSize(): Dimension {
         val size = super.getPreferredSize()
-        return Dimension(size.width.coerceAtLeast(JBUI.scale(120)), size.height.coerceAtLeast(JBUI.scale(26)))
+        return Dimension(size.width.coerceAtLeast(JBUI.scale(120)), size.height.coerceAtLeast(JBUI.scale(24)))
     }
 
     companion object {
 
         /**
          * 根据类全限定名返回文件类型图标。
-         *
-         * 简单规则：包含 "Feign" 或 "HttpExchange" 返回接口/客户端风格图标，
-         * 其余返回 Java 类图标。
          *
          * @param className 类全限定名
          * @return 图标
@@ -252,6 +264,7 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
             return when {
                 simple.contains("Feign", ignoreCase = true) ||
                     simple.contains("HttpExchange", ignoreCase = true) ||
+                    simple.contains("Client", ignoreCase = true) ||
                     simple.contains("Api", ignoreCase = true) -> AllIcons.Nodes.Interface
                 simple.contains("Controller", ignoreCase = true) -> AllIcons.Nodes.Class
                 else -> AllIcons.Nodes.Class
@@ -266,7 +279,7 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
         private fun readableMutedForeground(): Color {
             val label = UIManager.getColor("Tree.textForeground") ?: UIUtil.getLabelForeground()
             val hint = UIUtil.getContextHelpForeground()
-            return mix(label, hint, 0.45f)
+            return mix(label, hint, 0.52f)
         }
 
         /**

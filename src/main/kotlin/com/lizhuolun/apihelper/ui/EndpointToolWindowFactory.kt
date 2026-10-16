@@ -8,6 +8,7 @@ import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.content.ContentManagerEvent
 import com.intellij.ui.content.ContentManagerListener
 import com.lizhuolun.apihelper.ApiHelperBundle
+import com.lizhuolun.apihelper.ui.debug.EndpointDebugPanel
 import com.lizhuolun.apihelper.ui.debug.EnvironmentManagePanel
 import com.lizhuolun.apihelper.ui.debug.GlobalParamsPanel
 import com.lizhuolun.apihelper.ui.debug.RequestHistoryPanel
@@ -15,11 +16,12 @@ import com.lizhuolun.apihelper.ui.debug.RequestHistoryPanel
 /**
  * ApiHelper 工具窗口工厂。
  *
- * 使用 IDE 原生 ContentManager 注册 4 个一级工作区标签页：
- * 1. 接口（上下可折叠的接口树 + 调试面板）
- * 2. 前置 URL（多环境 Base URL 表格管理）
- * 3. 请求历史（历史请求列表与一键回放）
- * 4. 全局参数（全局公共 Header 表格管理）
+ * 使用 IDE 原生 ContentManager 注册 5 个平级的一级工作区标签页：
+ * 1. 接口（Controller / Feign 端点树浏览）
+ * 2. 调试（请求与响应上下分区的轻量 API 调试器）
+ * 3. 前置 URL（多环境 Base URL 表格管理）
+ * 4. 请求历史（历史请求列表与一键回放）
+ * 5. 全局参数（全局公共 Header 表格管理）
  *
  * @author lizhuolun
  * @date 2026/6/16
@@ -30,6 +32,7 @@ class EndpointToolWindowFactory : ToolWindowFactory {
         configureToolWindowPlacement(toolWindow)
 
         val mainPanel = EndpointToolWindowPanel(project)
+        val debugPanel = EndpointDebugPanel(project)
         val envPanel = EnvironmentManagePanel(project)
         val globalParamsPanel = GlobalParamsPanel()
         lateinit var historyPanel: RequestHistoryPanel
@@ -38,6 +41,14 @@ class EndpointToolWindowFactory : ToolWindowFactory {
         val mainContent = contentFactory.createContent(
             mainPanel,
             ApiHelperBundle.message("toolwindow.nav.interfaces"),
+            false,
+        ).apply {
+            isCloseable = false
+        }
+
+        val debugContent = contentFactory.createContent(
+            debugPanel,
+            ApiHelperBundle.message("toolwindow.nav.debug"),
             false,
         ).apply {
             isCloseable = false
@@ -52,8 +63,8 @@ class EndpointToolWindowFactory : ToolWindowFactory {
         }
 
         historyPanel = RequestHistoryPanel(project) { entry ->
-            toolWindow.contentManager.setSelectedContent(mainContent)
-            mainPanel.replayHistoryEntry(entry)
+            toolWindow.contentManager.setSelectedContent(debugContent)
+            debugPanel.restoreHistoryEntry(entry)
         }
         val historyContent = contentFactory.createContent(
             historyPanel,
@@ -71,12 +82,18 @@ class EndpointToolWindowFactory : ToolWindowFactory {
             isCloseable = false
         }
 
-        mainPanel.onHistoryUpdated = {
+        mainPanel.onDebugRequested = { item ->
+            toolWindow.contentManager.setSelectedContent(debugContent)
+            debugPanel.loadEndpoint(item)
+        }
+
+        debugPanel.onHistoryUpdated = {
             historyPanel.refreshHistory()
         }
 
         val contentManager = toolWindow.contentManager
         contentManager.addContent(mainContent)
+        contentManager.addContent(debugContent)
         contentManager.addContent(envContent)
         contentManager.addContent(historyContent)
         contentManager.addContent(globalParamsContent)
@@ -84,6 +101,7 @@ class EndpointToolWindowFactory : ToolWindowFactory {
         contentManager.addContentManagerListener(object : ContentManagerListener {
             override fun selectionChanged(event: ContentManagerEvent) {
                 when (event.content) {
+                    debugContent -> debugPanel.reloadEnvironments()
                     envContent -> envPanel.loadFromSettings()
                     historyContent -> historyPanel.refreshHistory()
                     globalParamsContent -> globalParamsPanel.loadFromSettings()
@@ -91,7 +109,13 @@ class EndpointToolWindowFactory : ToolWindowFactory {
             }
         })
 
-        EndpointToolWindowService.of(project).register(mainPanel, envPanel, globalParamsPanel, mainContent)
+        EndpointToolWindowService.of(project).register(
+            panel = mainPanel,
+            debugPanel = debugPanel,
+            envPanel = envPanel,
+            globalParamsPanel = globalParamsPanel,
+            debugContent = debugContent,
+        )
         toolWindow.setTitleActions(mainPanel.createTitleActions())
 
         // 面板创建后立即加载一次数据

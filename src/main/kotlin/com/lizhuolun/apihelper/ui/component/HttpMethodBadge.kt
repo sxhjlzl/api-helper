@@ -15,27 +15,28 @@ import javax.swing.SwingConstants
 import javax.swing.UIManager
 
 /**
- * HTTP 方法徽章。
+ * HTTP 方法胶囊徽章。
  *
- * 使用浅底描边区分 HTTP 方法，便于接口列表快速扫描。
+ * 使用柔和底色与描边区分不同 HTTP 方法，统一固定宽度以保证接口列表中所有 URL 严格垂直对齐，
+ * 同时兼容 DELETE / OPTIONS 等较长方法名不截断。
  *
  * @param method HTTP 方法
  * @author lizhuolun
  * @date 2026/6/16
  */
-class HttpMethodBadge(method: HttpMethod) : JLabel(method.name, SwingConstants.CENTER) {
+class HttpMethodBadge(method: HttpMethod) : JLabel(displayLabel(method), SwingConstants.CENTER) {
 
     var method: HttpMethod = method
         set(value) {
             field = value
-            text = value.name
+            text = displayLabel(value)
             foreground = colors(value).foreground
             repaint()
         }
 
     init {
         isOpaque = false
-        font = UIManager.getFont("Label.font")?.deriveFont(Font.BOLD, 11f) ?: font.deriveFont(Font.BOLD, 11f)
+        font = (UIManager.getFont("Label.font") ?: font).deriveFont(Font.BOLD, 10f)
         foreground = colors(method).foreground
         val size = JBUI.size(METHOD_BADGE_WIDTH, METHOD_BADGE_HEIGHT)
         preferredSize = Dimension(size.width, size.height)
@@ -44,24 +45,32 @@ class HttpMethodBadge(method: HttpMethod) : JLabel(method.name, SwingConstants.C
     }
 
     override fun paintComponent(g: Graphics) {
-        val g2 = g as Graphics2D
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-
-        val arc = JBUI.scale(METHOD_BADGE_ARC)
-        val colors = colors(method)
-        g2.color = colors.background
-        g2.fillRoundRect(0, 0, width - 1, height - 1, arc, arc)
-        g2.color = colors.border
-        g2.drawRoundRect(0, 0, width - 1, height - 1, arc, arc)
-
+        val g2 = g.create() as Graphics2D
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            val arc = JBUI.scale(METHOD_BADGE_ARC)
+            val colors = colors(method)
+            g2.color = colors.background
+            g2.fillRoundRect(0, 0, width - 1, height - 1, arc, arc)
+            g2.color = colors.border
+            g2.drawRoundRect(0, 0, width - 1, height - 1, arc, arc)
+        } finally {
+            g2.dispose()
+        }
         super.paintComponent(g)
     }
 
     companion object {
 
-        private const val METHOD_BADGE_WIDTH = 40
-        private const val METHOD_BADGE_HEIGHT = 18
-        private const val METHOD_BADGE_ARC = 8
+        private const val METHOD_BADGE_WIDTH = 44
+        private const val METHOD_BADGE_HEIGHT = 16
+        private const val METHOD_BADGE_ARC = 5
+
+        private fun displayLabel(method: HttpMethod): String =
+            when (method) {
+                HttpMethod.OPTIONS -> "OPT"
+                else -> method.name
+            }
 
         /**
          * 返回方法徽章颜色。
@@ -69,42 +78,42 @@ class HttpMethodBadge(method: HttpMethod) : JLabel(method.name, SwingConstants.C
          * @param method HTTP 方法
          * @return 徽章颜色
          */
-        private fun colors(method: HttpMethod): MethodColors =
+        fun colors(method: HttpMethod): MethodColors =
             when (method) {
                 HttpMethod.GET -> MethodColors(
-                    background = JBColor(Color(0xEAF7EE), Color(0x20352A)),
-                    foreground = JBColor(Color(0x177245), Color(0x7ED69C)),
-                    border = JBColor(Color(0xB7DEC4), Color(0x355C43)),
+                    background = JBColor(Color(0xE8F8EE), Color(0x1D3328)),
+                    foreground = JBColor(Color(0x157347), Color(0x6EE7B7)),
+                    border = JBColor(Color(0xB6E2C6), Color(0x2E5440)),
                 )
                 HttpMethod.POST -> MethodColors(
-                    background = JBColor(Color(0xFFF3DE), Color(0x3A2D1C)),
-                    foreground = JBColor(Color(0x966313), Color(0xE0B56B)),
-                    border = JBColor(Color(0xE6C999), Color(0x614D2E)),
+                    background = JBColor(Color(0xFFF4E0), Color(0x382B19)),
+                    foreground = JBColor(Color(0x9A6700), Color(0xFCD34D)),
+                    border = JBColor(Color(0xEBD0A4), Color(0x5C4628)),
                 )
                 HttpMethod.PUT -> MethodColors(
-                    background = JBColor(Color(0xEDF2FF), Color(0x222D43)),
-                    foreground = JBColor(Color(0x315EAF), Color(0x9DB9F2)),
-                    border = JBColor(Color(0xC5D4F6), Color(0x3F5278)),
+                    background = JBColor(Color(0xEBF2FF), Color(0x1E2B42)),
+                    foreground = JBColor(Color(0x2563EB), Color(0x93C5FD)),
+                    border = JBColor(Color(0xC2D6FA), Color(0x374D75)),
                 )
                 HttpMethod.DELETE -> MethodColors(
-                    background = JBColor(Color(0xFDEDED), Color(0x3B2424)),
-                    foreground = JBColor(Color(0xB33A3A), Color(0xF09A9A)),
-                    border = JBColor(Color(0xE8B8B8), Color(0x674141)),
+                    background = JBColor(Color(0xFEECEC), Color(0x3A2123)),
+                    foreground = JBColor(Color(0xC92A2A), Color(0xFCA5A5)),
+                    border = JBColor(Color(0xF1C0C0), Color(0x63373A)),
                 )
                 HttpMethod.PATCH -> MethodColors(
-                    background = JBColor(Color(0xF3EEFB), Color(0x332A3E)),
-                    foreground = JBColor(Color(0x7552A8), Color(0xC2A4EF)),
-                    border = JBColor(Color(0xD6C7EC), Color(0x58466D)),
+                    background = JBColor(Color(0xF3EDFC), Color(0x30263D)),
+                    foreground = JBColor(Color(0x6D41A1), Color(0xC4B5FD)),
+                    border = JBColor(Color(0xD8C9F2), Color(0x524069)),
                 )
                 HttpMethod.HEAD -> MethodColors(
-                    background = JBColor(Color(0xEEF2F3), Color(0x283236)),
-                    foreground = JBColor(Color(0x506870), Color(0xA4BDC5)),
-                    border = JBColor(Color(0xCBD6DA), Color(0x485C63)),
+                    background = JBColor(Color(0xEEF2F5), Color(0x263036)),
+                    foreground = JBColor(Color(0x475569), Color(0x94A3B8)),
+                    border = JBColor(Color(0xCBD5E1), Color(0x42535E)),
                 )
                 HttpMethod.OPTIONS -> MethodColors(
-                    background = JBColor(Color(0xE8F5F3), Color(0x203735)),
-                    foreground = JBColor(Color(0x287269), Color(0x84D7CC)),
-                    border = JBColor(Color(0xB8DDD8), Color(0x3C605C)),
+                    background = JBColor(Color(0xE6F6F4), Color(0x1E3533)),
+                    foreground = JBColor(Color(0x0D9488), Color(0x5EEAD4)),
+                    border = JBColor(Color(0xB3E2DC), Color(0x355C58)),
                 )
                 HttpMethod.ANY -> MethodColors(
                     background = UIManager.getColor("Button.background") ?: UIUtil.getPanelBackground(),
@@ -113,7 +122,7 @@ class HttpMethodBadge(method: HttpMethod) : JLabel(method.name, SwingConstants.C
                 )
             }
 
-        private data class MethodColors(
+        data class MethodColors(
             val background: Color,
             val foreground: Color,
             val border: Color,

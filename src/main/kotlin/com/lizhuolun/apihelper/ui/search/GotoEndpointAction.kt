@@ -121,11 +121,13 @@ class GotoEndpointAction : DumbAwareAction() {
             }
 
             val hintLabel = JBLabel(ApiHelperBundle.message("goto.endpoint.popup.hint")).apply {
+                isOpaque = true
+                background = ApiHelperUiStyle.sectionHeaderBackground()
                 foreground = UIUtil.getContextHelpForeground()
                 font = font?.deriveFont(Font.PLAIN, 11f)
                 border = BorderFactory.createCompoundBorder(
                     BorderFactory.createMatteBorder(1, 0, 0, 0, ApiHelperUiStyle.borderColor()),
-                    BorderFactory.createEmptyBorder(4, 10, 4, 10),
+                    BorderFactory.createEmptyBorder(5, 10, 5, 10),
                 )
             }
 
@@ -297,11 +299,11 @@ class GotoEndpointAction : DumbAwareAction() {
 
         private val methodBadge = HttpMethodBadge(HttpMethod.GET)
         private val urlLabel = JLabel().apply {
-            font = font?.deriveFont(Font.PLAIN, 12f)
+            font = ApiHelperUiStyle.labelFont()
         }
         private val kindBadge = RoundedBadgeLabel()
         private val locationLabel = JLabel().apply {
-            font = font?.deriveFont(Font.PLAIN, 11f)
+            font = ApiHelperUiStyle.smallFont()
         }
         private val rightPanel = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(6), 0)).apply {
             isOpaque = false
@@ -310,7 +312,10 @@ class GotoEndpointAction : DumbAwareAction() {
         }
 
         init {
-            border = BorderFactory.createEmptyBorder(JBUI.scale(5), JBUI.scale(10), JBUI.scale(5), JBUI.scale(10))
+            border = BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, ApiHelperUiStyle.subtleGridColor()),
+                BorderFactory.createEmptyBorder(JBUI.scale(6), JBUI.scale(10), JBUI.scale(6), JBUI.scale(10)),
+            )
             add(methodBadge, BorderLayout.WEST)
             add(urlLabel, BorderLayout.CENTER)
             add(rightPanel, BorderLayout.EAST)

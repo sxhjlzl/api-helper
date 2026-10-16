@@ -99,11 +99,11 @@ object CurlCommandBuilder {
     }
 
     /**
-     * 合并全局 Header 与当前接口 Header，同名（忽略大小写）时当前接口 Header 优先。
+     * 合并全局参数与当前接口参数，同名（忽略大小写）时当前接口参数优先。
      *
-     * @param globalHeaders 全局公共 Header
-     * @param endpointHeaders 当前接口 Header
-     * @return 合并后的 Header 列表
+     * @param globalHeaders 全局公共参数（Header / Query / Cookie）
+     * @param endpointHeaders 当前接口参数
+     * @return 合并后的参数列表
      */
     fun mergeHeaders(
         globalHeaders: List<Pair<String, String>>,

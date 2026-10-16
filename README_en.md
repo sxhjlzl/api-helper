@@ -32,7 +32,7 @@
 | :--- | :--- |
 | **Bidirectional Gutter Navigation** | One-click jump between `@RestController` and `@FeignClient` / `@HttpExchange` methods; tolerates differing path variable names (`{id}` vs `{orderId}`) and recognizes custom composite meta-annotations (e.g. `@ApiV1RestController`). |
 | **Global Endpoint Search** | Press `Ctrl + Alt + \` (`Cmd + Opt + \` on macOS) anywhere to search across HTTP methods, URLs, methods, classes, and modules: `Enter` jumps to source, `Shift + Enter` jumps to counterpart, `Ctrl/Cmd + Enter` opens the debugger. |
-| **4-Tab Split Workspace** | Native top-level tabs for **Interfaces**, **Base URL**, **History**, and **Global Params**. The **Interfaces** tab features a collapsible vertical split (**Interfaces** tree on top + **Debug** pane on bottom), module grouping, and orphan endpoint filtering. |
+| **5-Tab Native Workspace** | Native top-level tabs for **Interfaces**, **Debug**, **Base URL**, **History**, and **Global Params**. **Interfaces** supports module grouping and orphan endpoint filtering; **Debug** features a vertical Request/Response split with line-numbered code areas. |
 | **Smart API Debugger** | Auto-prefills Path / Query / Header / Cookie parameters and **recursively expands nested DTOs & `List<T>` into JSON drafts** (honoring `@JsonProperty` and `@Schema(example)`); includes environment switching, draft persistence, 30-request history replay, and streaming file uploads. |
 | **cURL & Markdown Docs** | One-click export of ready-to-run **cURL commands** (with active Base URL and global headers) and standard **Markdown API docs** (extracting Javadocs, `@param`, and Swagger annotations, and expanding generic wrappers like `DllResult<T>` and `DllPageResult<T>`). |
 | **Spring Config Aware** | Automatically resolves `application.yml`, `bootstrap.yml`, and `application-{profile}.yml` for `server.port`, `context-path`, `servlet.path`, and `${var:default}` placeholders; supports both **Java & Kotlin** via UAST. |
@@ -114,6 +114,6 @@ src/main/kotlin/com/lizhuolun/apihelper/
 
 ## Feedback & Support
 
-- Current Version: **`1.1.0`** (see [CHANGELOG_en.md](./CHANGELOG_en.md) for full release notes)
+- Current Version: **`1.1.1`** (see [CHANGELOG_en.md](./CHANGELOG_en.md) for full release notes)
 - Found a bug or have a feature request? Feel free to open an issue on [GitHub Issues](https://github.com/sxhjlzl/api-helper/issues).
 - If **ApiHelper** saves you time, a **Star** on GitHub is greatly appreciated!

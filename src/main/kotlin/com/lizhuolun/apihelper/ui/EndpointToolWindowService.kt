@@ -8,6 +8,7 @@ import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.content.Content
 import com.lizhuolun.apihelper.cache.CacheChangeListener
 import com.lizhuolun.apihelper.core.HttpMappingInfo
+import com.lizhuolun.apihelper.ui.debug.EndpointDebugPanel
 import com.lizhuolun.apihelper.ui.debug.EnvironmentManagePanel
 import com.lizhuolun.apihelper.ui.debug.GlobalParamsPanel
 
@@ -29,13 +30,16 @@ class EndpointToolWindowService(private val project: Project) {
     private var panel: EndpointToolWindowPanel? = null
 
     @Volatile
+    private var debugPanel: EndpointDebugPanel? = null
+
+    @Volatile
     private var envPanel: EnvironmentManagePanel? = null
 
     @Volatile
     private var globalParamsPanel: GlobalParamsPanel? = null
 
     @Volatile
-    private var mainContent: Content? = null
+    private var debugContent: Content? = null
 
     init {
         project.messageBus.connect(project).subscribe(
@@ -52,20 +56,23 @@ class EndpointToolWindowService(private val project: Project) {
      * 注册实际创建好的工具窗口面板与关联 Tab。
      *
      * @param panel 接口主面板
+     * @param debugPanel 调试面板
      * @param envPanel 前置 URL 管理面板
      * @param globalParamsPanel 全局参数管理面板
-     * @param mainContent 接口主 Tab Content
+     * @param debugContent 调试一级 Tab Content
      */
     fun register(
         panel: EndpointToolWindowPanel,
+        debugPanel: EndpointDebugPanel? = null,
         envPanel: EnvironmentManagePanel? = null,
         globalParamsPanel: GlobalParamsPanel? = null,
-        mainContent: Content? = null,
+        debugContent: Content? = null,
     ) {
         this.panel = panel
+        this.debugPanel = debugPanel
         this.envPanel = envPanel
         this.globalParamsPanel = globalParamsPanel
-        this.mainContent = mainContent
+        this.debugContent = debugContent
     }
 
     /**
@@ -81,13 +88,13 @@ class EndpointToolWindowService(private val project: Project) {
      */
     fun reloadDebugEnvironments() {
         if (project.isDisposed) return
-        panel?.reloadDebugEnvironments()
+        debugPanel?.reloadEnvironments()
         envPanel?.loadFromSettings()
         globalParamsPanel?.loadFromSettings()
     }
 
     /**
-     * 打开工具窗口，切换到“接口”主 Tab 并展开底部的“调试”面板加载指定端点。
+     * 打开工具窗口，切换到一级“调试”Tab 并加载指定端点。
      *
      * @param info Controller 端点映射
      */
@@ -100,9 +107,9 @@ class EndpointToolWindowService(private val project: Project) {
         }) ?: return
         val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("ApiHelper")
         toolWindow?.show {
-            mainContent?.let { toolWindow.contentManager.setSelectedContent(it) }
-            panel?.showDebugPanel(item)
-        } ?: panel?.showDebugPanel(item)
+            debugContent?.let { toolWindow.contentManager.setSelectedContent(it) }
+            debugPanel?.loadEndpoint(item)
+        } ?: debugPanel?.loadEndpoint(item)
     }
 
     companion object {

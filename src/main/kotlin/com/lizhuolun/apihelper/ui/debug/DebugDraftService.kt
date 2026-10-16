@@ -71,6 +71,15 @@ class DebugDraftService {
     fun getHistory(): List<DebugHistoryEntry> = history.toList()
 
     /**
+     * 移除指定的一条历史记录。
+     *
+     * @param entry 待移除的历史记录
+     */
+    fun removeHistory(entry: DebugHistoryEntry) {
+        history.remove(entry)
+    }
+
+    /**
      * 清空调试请求历史记录。
      */
     fun clearHistory() {

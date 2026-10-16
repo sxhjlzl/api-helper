@@ -32,7 +32,7 @@
 | :--- | :--- |
 | **双向源码导航** | `@RestController` 与 `@FeignClient` / `@HttpExchange` 方法间 Gutter 图标一键互跳；自动容忍路径变量异名（如 `{id}` 与 `{orderId}`），支持自定义组合元注解（如 `@ApiV1RestController`）。 |
 | **全局接口搜索** | 快捷键 `Ctrl + Alt + \`（macOS `Cmd + Opt + \`）随时唤起搜索弹窗，支持多关键词过滤：`Enter` 跳源码、`Shift + Enter` 跳对端、`Ctrl/Cmd + Enter` 直接调试。 |
-| **四合一工作区** | 顶部集成 **`接口`**、**`前置 URL`**、**`请求历史`**、**`全局参数`** 四大原生标签页；`接口` 页采用上下可折叠分栏（上半区接口树 + 下半区调试器），支持按模块分组与孤儿接口一键筛查。 |
+| **五合一工作区** | 顶部集成 **`接口`**、**`调试`**、**`前置 URL`**、**`请求历史`**、**`全局参数`** 五大原生标签页；`接口` 页支持按模块分组与孤儿接口一键筛查，`调试` 页采用上下可调节分栏（上半区请求配置 + 下半区带行号响应展示）。 |
 | **智能 API 调试** | 自动解析方法入参预填 Path / Query / Header / Cookie，**递归展开嵌套 DTO 与 `List<T>` 生成 JSON 草稿**（识别 `@JsonProperty` 与 `@Schema(example)`）；支持多环境切换、草稿记忆、30 条历史回放与流式文件上传。 |
 | **cURL & 文档导出** | 在编辑器 Gutter、接口树或调试面板均可一键导出标准 **cURL 命令**（自动合并全局 Header 与当前环境域名）及带字段注释的 **Markdown 接口文档**（支持展开 `DllResult<T>`、`DllPageResult<T>` 等泛型包装响应）。 |
 | **Spring 配置感知** | 自动读取 `application.yml` / `bootstrap.yml` / `application-{profile}.yml`，解析 `server.port`、`context-path`、`servlet.path` 及 `${var:default}` 占位符；基于 UAST 同时支持 **Java 与 Kotlin**。 |
@@ -114,6 +114,6 @@ src/main/kotlin/com/lizhuolun/apihelper/
 
 ## 反馈与支持
 
-- 当前版本：**`1.1.0`**（完整变更记录见 [CHANGELOG.md](./CHANGELOG.md)）
+- 当前版本：**`1.1.1`**（完整变更记录见 [CHANGELOG.md](./CHANGELOG.md)）
 - 遇到问题或有新功能想法？欢迎提交 [GitHub Issue](https://github.com/sxhjlzl/api-helper/issues)。
 - 如果 **ApiHelper** 提升了你的开发效率，欢迎给仓库点亮一颗 **Star** 支持！
