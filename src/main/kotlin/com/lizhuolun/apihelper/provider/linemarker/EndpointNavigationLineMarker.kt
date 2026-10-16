@@ -25,6 +25,8 @@ import com.lizhuolun.apihelper.ApiHelperBundle
 import com.lizhuolun.apihelper.core.HttpMappingInfo
 import com.lizhuolun.apihelper.provider.UastElementUtils
 import com.lizhuolun.apihelper.ui.EndpointToolWindowService
+import com.lizhuolun.apihelper.ui.EndpointTree
+import com.lizhuolun.apihelper.ui.EndpointTreeItem
 import java.awt.datatransfer.StringSelection
 import java.awt.event.MouseEvent
 import javax.swing.Icon
@@ -169,6 +171,16 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
                             copyUrlAndNotify(project, url)
                         }
                     })
+                    group.add(object : AnAction(ApiHelperBundle.message("toolwindow.action.copy.curl"), null, AllIcons.Actions.Copy) {
+                        override fun actionPerformed(e: AnActionEvent) {
+                            copyCurlAndNotify(project, mapping)
+                        }
+                    })
+                    group.add(object : AnAction(ApiHelperBundle.message("toolwindow.action.copy.api.doc"), null, AllIcons.Actions.Copy) {
+                        override fun actionPerformed(e: AnActionEvent) {
+                            copyApiDocAndNotify(project, mapping)
+                        }
+                    })
                     return group
                 }
 
@@ -205,6 +217,50 @@ abstract class EndpointNavigationLineMarker : LineMarkerProviderDescriptor() {
                     NotificationType.INFORMATION,
                 )
                 .notify(project)
+        }
+
+        private fun copyCurlAndNotify(project: Project, mapping: HttpMappingInfo) {
+            ApplicationManager.getApplication().executeOnPooledThread {
+                val curl = ApplicationManager.getApplication().runReadAction(Computable {
+                    if (project.isDisposed) return@Computable null
+                    val method = mapping.resolveMethod() ?: return@Computable null
+                    val item = EndpointTreeItem.from(mapping, method)
+                    EndpointTree.buildCurlForEndpoint(item, method)
+                }) ?: return@executeOnPooledThread
+                ApplicationManager.getApplication().invokeLater {
+                    if (project.isDisposed) return@invokeLater
+                    CopyPasteManager.getInstance().setContents(StringSelection(curl))
+                    NotificationGroupManager.getInstance()
+                        .getNotificationGroup("ApiHelper")
+                        .createNotification(
+                            ApiHelperBundle.message("debug.notification.curl.copied"),
+                            NotificationType.INFORMATION,
+                        )
+                        .notify(project)
+                }
+            }
+        }
+
+        private fun copyApiDocAndNotify(project: Project, mapping: HttpMappingInfo) {
+            ApplicationManager.getApplication().executeOnPooledThread {
+                val markdown = ApplicationManager.getApplication().runReadAction(Computable {
+                    if (project.isDisposed) return@Computable null
+                    val method = mapping.resolveMethod() ?: return@Computable null
+                    val item = EndpointTreeItem.from(mapping, method)
+                    EndpointTree.buildAiMarkdown(item, method)
+                }) ?: return@executeOnPooledThread
+                ApplicationManager.getApplication().invokeLater {
+                    if (project.isDisposed) return@invokeLater
+                    CopyPasteManager.getInstance().setContents(StringSelection(markdown))
+                    NotificationGroupManager.getInstance()
+                        .getNotificationGroup("ApiHelper")
+                        .createNotification(
+                            ApiHelperBundle.message("toolwindow.notification.api.doc.copied"),
+                            NotificationType.INFORMATION,
+                        )
+                        .notify(project)
+                }
+            }
         }
 
         /**

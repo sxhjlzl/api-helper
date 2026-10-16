@@ -1,19 +1,24 @@
 package com.lizhuolun.apihelper.ui.debug
 
 import com.intellij.icons.AllIcons
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Computable
 import com.intellij.openapi.ui.ComboBox
+import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.util.Computable
+import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
+import com.intellij.util.net.JdkProxyProvider
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
-import com.intellij.util.proxy.CommonProxy
 import com.lizhuolun.apihelper.ApiHelperBundle
 import com.lizhuolun.apihelper.config.ApplicationConfigReader
 import com.lizhuolun.apihelper.core.HttpMethod
@@ -24,10 +29,12 @@ import com.lizhuolun.apihelper.ui.EndpointTreeItem
 import com.lizhuolun.apihelper.ui.component.ApiHelperUiStyle
 import java.awt.BorderLayout
 import java.awt.CardLayout
+import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Font
+import java.awt.datatransfer.StringSelection
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpCookie
@@ -40,6 +47,7 @@ import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.charset.StandardCharsets
 import java.time.Duration
@@ -89,6 +97,11 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
      **/
     private var isSending = false
 
+    private val environmentBox = ComboBox<EnvironmentOption>().apply {
+        ApiHelperUiStyle.applyComboBox(this, width = 108, bold = false)
+        toolTipText = ApiHelperBundle.message("debug.env.tooltip")
+        addActionListener { onEnvironmentSelected() }
+    }
     private val methodBox = ComboBox(arrayOf("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS")).apply {
         selectedItem = "GET"
         ApiHelperUiStyle.applyComboBox(this, width = 82, bold = true)
@@ -96,9 +109,22 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
     private val urlField = JBTextField().apply {
         emptyText.text = ApiHelperBundle.message("debug.url.placeholder")
         ApiHelperUiStyle.applyTextField(this)
+        addActionListener { onPrimaryAction() }
     }
     private val sendButton = SendButton(ApiHelperBundle.message("debug.action.send")).apply {
         addActionListener { onPrimaryAction() }
+    }
+    private val copyCurlButton = JButton(ApiHelperBundle.message("debug.action.copy.curl"), AllIcons.Actions.Copy).apply {
+        ApiHelperUiStyle.applyOutlinedButton(this)
+        addActionListener { copyCurrentCurl() }
+    }
+    private val resetDraftButton = JButton(ApiHelperBundle.message("debug.action.reset.draft"), AllIcons.Actions.Rollback).apply {
+        ApiHelperUiStyle.applyOutlinedButton(this)
+        addActionListener { resetCurrentEndpointDraft() }
+    }
+    private val historyButton = JButton(ApiHelperBundle.message("debug.action.history"), AllIcons.Vcs.History).apply {
+        ApiHelperUiStyle.applyOutlinedButton(this)
+        addActionListener { showHistoryPopup() }
     }
     private val requestStatusLabel = JBLabel(ApiHelperBundle.message("debug.status.ready")).apply {
         border = BorderFactory.createEmptyBorder(3, 0, 0, 0)
@@ -118,6 +144,9 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
     private val bodyCardLayout = CardLayout()
     private val bodyContentPanel = JPanel(bodyCardLayout)
     private var currentServerPort = DEFAULT_SERVER_PORT
+    private var currentEndpointItem: EndpointTreeItem? = null
+    private var currentEndpointRelativeUrl: String = ""
+    private var updatingEnvironments: Boolean = false
     private var selectedBodyType = BodyType.NONE
     private val requestBodyArea = JBTextArea().apply {
         font = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -157,11 +186,44 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             addTab(ApiHelperBundle.message("debug.tab.headers"), JBScrollPane(responseHeaderArea))
         }
 
+        queryModel.addTableModelListener { updateRequestTabTitles(requestTabs) }
+        pathModel.addTableModelListener { updateRequestTabTitles(requestTabs) }
+        headerModel.addTableModelListener { updateRequestTabTitles(requestTabs) }
+        cookieModel.addTableModelListener { updateRequestTabTitles(requestTabs) }
+
         contentTabs.apply {
             addTab(ApiHelperBundle.message("debug.section.request"), requestTabs)
             addTab(ApiHelperBundle.message("debug.section.response"), responseTabs)
         }
         add(contentTabs, BorderLayout.CENTER)
+        reloadEnvironments()
+    }
+
+    /**
+     * 重新加载环境选择器选项（Settings 应用后或初始化时调用）。
+     */
+    fun reloadEnvironments() {
+        updatingEnvironments = true
+        try {
+            val settings = ApiHelperSettings.getInstance()
+            val savedName = settings.state.selectedEnvironmentName
+            val envs = settings.parseEnvironments()
+            environmentBox.removeAllItems()
+            val autoOption = EnvironmentOption("", ApiHelperBundle.message("debug.env.auto"), null)
+            environmentBox.addItem(autoOption)
+            var matched: EnvironmentOption = autoOption
+            for (env in envs) {
+                val option = EnvironmentOption(env.name, env.name, env.baseUrl)
+                environmentBox.addItem(option)
+                if (env.name == savedName) {
+                    matched = option
+                }
+            }
+            environmentBox.selectedItem = matched
+            environmentBox.isVisible = envs.isNotEmpty()
+        } finally {
+            updatingEnvironments = false
+        }
     }
 
     /**
@@ -170,6 +232,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
      * @param item 端点展示项
      */
     fun loadEndpoint(item: EndpointTreeItem) {
+        saveCurrentDraftIfLoaded()
         ApplicationManager.getApplication().executeOnPooledThread {
             if (project.isDisposed) return@executeOnPooledThread
             val serverPort = resolveServerPort(item)
@@ -182,8 +245,18 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
     }
 
     private fun applyLoadedEndpoint(item: EndpointTreeItem, serverPort: Int, params: DebugAutoParams) {
-        methodBox.selectedItem = if (item.httpMethod == HttpMethod.ANY) "GET" else item.httpMethod.name
+        currentEndpointItem = item
+        currentEndpointRelativeUrl = item.url
         currentServerPort = serverPort
+        reloadEnvironments()
+
+        val savedDraft = DebugDraftService.of(project).getDraft(endpointDraftKey(item))
+        if (savedDraft != null) {
+            applySavedDraft(item, savedDraft)
+            return
+        }
+
+        methodBox.selectedItem = if (item.httpMethod == HttpMethod.ANY) "GET" else item.httpMethod.name
         urlField.text = normalizeInitialUrl(item.url, currentServerPort)
         pathModel.setPairs(pathPairs(item.url, params.path))
         queryModel.setPairs(params.query)
@@ -197,11 +270,174 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         requestBodyArea.text = params.bodyText
         selectBodyType(if (params.bodyText.isBlank()) BodyType.NONE else BodyType.JSON)
         requestStatusLabel.text = ApiHelperBundle.message("debug.status.loaded", item.methodName)
+        requestStatusLabel.foreground = UIUtil.getContextHelpForeground()
         contentTabs.selectedIndex = 0
     }
 
+    private fun applySavedDraft(item: EndpointTreeItem, draft: EndpointDebugDraft) {
+        methodBox.selectedItem = draft.method.ifBlank { "GET" }
+        urlField.text = draft.url
+        pathModel.setPairs(draft.path)
+        queryModel.setPairs(draft.query)
+        headerModel.setPairs(draft.headers)
+        cookieModel.setPairs(draft.cookies)
+        formDataModel.clear()
+        draft.formData.forEachIndexed { idx, row ->
+            formDataModel.setValueAt(row.enabled, idx, 0)
+            formDataModel.setValueAt(row.name, idx, 1)
+            formDataModel.setValueAt(row.value, idx, 2)
+            formDataModel.setValueAt(row.type, idx, 3)
+        }
+        urlEncodedModel.setPairs(draft.urlEncoded)
+        binaryPath = draft.binaryPath
+        if (binaryPath.isNotBlank()) {
+            binaryPathLabel.text = binaryPath
+            binaryPathLabel.foreground = UIUtil.getLabelForeground()
+        } else {
+            binaryPathLabel.text = ApiHelperBundle.message("debug.body.binary.placeholder")
+            binaryPathLabel.foreground = UIUtil.getContextHelpForeground()
+        }
+        requestBodyArea.text = draft.bodyText
+        val restoredType = BodyType.entries.firstOrNull { it.name == draft.bodyTypeName } ?: BodyType.NONE
+        selectBodyType(restoredType)
+        requestStatusLabel.text = ApiHelperBundle.message("debug.status.loaded.draft", item.methodName)
+        requestStatusLabel.foreground = UIUtil.getContextHelpForeground()
+        contentTabs.selectedIndex = 0
+    }
+
+    /**
+     * 将当前面板中填写的参数保存至草稿服务。
+     */
+    private fun saveCurrentDraftIfLoaded() {
+        val item = currentEndpointItem ?: return
+        DebugDraftService.of(project).saveDraft(endpointDraftKey(item), snapshotCurrentDraft())
+    }
+
+    private fun snapshotCurrentDraft(): EndpointDebugDraft =
+        EndpointDebugDraft(
+            method = methodBox.selectedItem?.toString().orEmpty(),
+            url = urlField.text.trim(),
+            query = queryModel.toPairs(),
+            path = pathModel.toPairs(),
+            headers = headerModel.toPairs(),
+            cookies = cookieModel.toPairs(),
+            bodyTypeName = selectedBodyType.name,
+            bodyText = requestBodyArea.text,
+            binaryPath = binaryPath,
+            formData = formDataModel.toRows().map { it.copy() },
+            urlEncoded = urlEncodedModel.toPairs(),
+        )
+
+    private fun showHistoryPopup() {
+        val entries = DebugDraftService.of(project).getHistory()
+        if (entries.isEmpty()) {
+            NotificationGroupManager.getInstance()
+                .getNotificationGroup("ApiHelper")
+                .createNotification(
+                    ApiHelperBundle.message("debug.history.empty"),
+                    NotificationType.INFORMATION,
+                )
+                .notify(project)
+            return
+        }
+        JBPopupFactory.getInstance()
+            .createPopupChooserBuilder(entries)
+            .setTitle(ApiHelperBundle.message("debug.history.title"))
+            .setItemSelectedCallback { selected ->
+                if (selected != null) {
+                    restoreHistoryEntry(selected)
+                }
+            }
+            .createPopup()
+            .showUnderneathOf(historyButton)
+    }
+
+    private fun restoreHistoryEntry(entry: DebugHistoryEntry) {
+        val draft = entry.draft
+        methodBox.selectedItem = draft.method.ifBlank { "GET" }
+        urlField.text = draft.url
+        pathModel.setPairs(draft.path)
+        queryModel.setPairs(draft.query)
+        headerModel.setPairs(draft.headers)
+        cookieModel.setPairs(draft.cookies)
+        formDataModel.clear()
+        draft.formData.forEachIndexed { idx, row ->
+            formDataModel.setValueAt(row.enabled, idx, 0)
+            formDataModel.setValueAt(row.name, idx, 1)
+            formDataModel.setValueAt(row.value, idx, 2)
+            formDataModel.setValueAt(row.type, idx, 3)
+        }
+        urlEncodedModel.setPairs(draft.urlEncoded)
+        binaryPath = draft.binaryPath
+        if (binaryPath.isNotBlank()) {
+            binaryPathLabel.text = binaryPath
+            binaryPathLabel.foreground = UIUtil.getLabelForeground()
+        } else {
+            binaryPathLabel.text = ApiHelperBundle.message("debug.body.binary.placeholder")
+            binaryPathLabel.foreground = UIUtil.getContextHelpForeground()
+        }
+        requestBodyArea.text = draft.bodyText
+        val restoredType = BodyType.entries.firstOrNull { it.name == draft.bodyTypeName } ?: BodyType.NONE
+        selectBodyType(restoredType)
+
+        lastResponseBody = entry.responseBody
+        responseHeaderArea.text = entry.responseHeaders
+        responseHeaderArea.caretPosition = 0
+        responseCookieArea.text = entry.responseCookies
+        responseCookieArea.caretPosition = 0
+        renderResponseBody()
+
+        if (entry.statusCode != null) {
+            requestStatusLabel.text = ApiHelperBundle.message("debug.status.done", entry.statusCode, entry.elapsedMs)
+            requestStatusLabel.foreground = statusForegroundColor(entry.statusCode)
+        } else {
+            requestStatusLabel.text = ApiHelperBundle.message("debug.status.failed", entry.elapsedMs)
+            requestStatusLabel.foreground = UIUtil.getErrorForeground()
+        }
+    }
+
+    /**
+     * 重置当前加载接口的草稿，重新从源码注解与 DTO 生成默认请求参数。
+     */
+    private fun resetCurrentEndpointDraft() {
+        val item = currentEndpointItem ?: return
+        DebugDraftService.of(project).removeDraft(endpointDraftKey(item))
+        ApplicationManager.getApplication().executeOnPooledThread {
+            if (project.isDisposed) return@executeOnPooledThread
+            val serverPort = resolveServerPort(item)
+            val params = resolveDebugParams(item)
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+                applyLoadedEndpoint(item, serverPort, params)
+            }
+        }
+    }
+
+    private fun endpointDraftKey(item: EndpointTreeItem): String =
+        "${item.className}#${item.methodName}:${item.httpMethod.name}:${item.url}"
+
+    private fun onEnvironmentSelected() {
+        if (updatingEnvironments) return
+        val option = environmentBox.selectedItem as? EnvironmentOption ?: return
+        ApiHelperSettings.getInstance().state.selectedEnvironmentName = option.name
+        val currentUrl = urlField.text.trim()
+        val pathPart = extractPathFromUrl(currentUrl).ifBlank { currentEndpointRelativeUrl }
+        if (pathPart.isNotBlank()) {
+            urlField.text = normalizeInitialUrl(pathPart, currentServerPort)
+        }
+    }
+
+    private fun extractPathFromUrl(rawUrl: String): String {
+        if (rawUrl.isBlank()) return ""
+        if (rawUrl.startsWith("/")) return rawUrl
+        val schemeIdx = rawUrl.indexOf("://")
+        if (schemeIdx < 0) return rawUrl
+        val slashIdx = rawUrl.indexOf('/', schemeIdx + 3)
+        return if (slashIdx >= 0) rawUrl.substring(slashIdx) else "/"
+    }
+
     private fun buildRequestBar(): JPanel {
-        return JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
+        return JPanel(BorderLayout(JBUI.scale(6), 0)).apply {
             isOpaque = true
             background = UIUtil.getPanelBackground()
             border = BorderFactory.createCompoundBorder(
@@ -210,11 +446,19 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             )
             val left = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
                 isOpaque = false
+                add(environmentBox)
                 add(methodBox)
+            }
+            val right = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(4), 0)).apply {
+                isOpaque = false
+                add(sendButton)
+                add(copyCurlButton)
+                add(historyButton)
+                add(resetDraftButton)
             }
             add(left, BorderLayout.WEST)
             add(urlField, BorderLayout.CENTER)
-            add(sendButton, BorderLayout.EAST)
+            add(right, BorderLayout.EAST)
             add(requestStatusLabel, BorderLayout.SOUTH)
         }
     }
@@ -384,6 +628,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             tableHeader.font = tableHeader.font?.deriveFont(Font.PLAIN, 12f)
             setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
             tableHeader.reorderingAllowed = false
+            putClientProperty("terminateEditOnFocusLost", true)
         }
 
     private fun configureDeleteColumn(table: JTable, deleteAction: (row: Int) -> Unit) {
@@ -423,12 +668,41 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             border = BorderFactory.createEmptyBorder(6, 8, 6, 8)
             background = UIUtil.getPanelBackground()
             add(responseBodyTypeBox)
+            add(JButton(ApiHelperBundle.message("debug.action.copy"), AllIcons.Actions.Copy).apply {
+                addActionListener { copyResponseBody() }
+            })
         }
         return JPanel(BorderLayout()).apply {
             add(toolbar, BorderLayout.NORTH)
             add(JBScrollPane(responseBodyArea), BorderLayout.CENTER)
         }
     }
+
+    private fun copyResponseBody() {
+        val text = responseBodyArea.text
+        if (text.isEmpty()) return
+        CopyPasteManager.getInstance().setContents(StringSelection(text))
+        if (!project.isDisposed) {
+            NotificationGroupManager.getInstance()
+                .getNotificationGroup("ApiHelper")
+                .createNotification(
+                    ApiHelperBundle.message("debug.notification.response.copied"),
+                    NotificationType.INFORMATION,
+                )
+                .notify(project)
+        }
+    }
+
+    private fun updateRequestTabTitles(requestTabs: JBTabbedPane) {
+        if (requestTabs.tabCount < 5) return
+        requestTabs.setTitleAt(0, tabTitleWithCount(ApiHelperBundle.message("debug.tab.query"), queryModel.toPairs().size))
+        requestTabs.setTitleAt(2, tabTitleWithCount(ApiHelperBundle.message("debug.tab.path"), pathModel.toPairs().size))
+        requestTabs.setTitleAt(3, tabTitleWithCount(ApiHelperBundle.message("debug.tab.headers"), headerModel.toPairs().size))
+        requestTabs.setTitleAt(4, tabTitleWithCount(ApiHelperBundle.message("debug.tab.cookies"), cookieModel.toPairs().size))
+    }
+
+    private fun tabTitleWithCount(base: String, count: Int): String =
+        if (count > 0) "$base ($count)" else base
 
     private fun readOnlyArea(): JBTextArea =
         JBTextArea().apply {
@@ -449,18 +723,84 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
     }
 
     override fun removeNotify() {
+        saveCurrentDraftIfLoaded()
         super.removeNotify()
         // 面板销毁时主动取消在途请求，避免后台线程继续占用连接
         currentRequestFuture?.cancel(true)
     }
 
+    private fun copyCurrentCurl() {
+        saveCurrentDraftIfLoaded()
+        val globalHeaders = ApiHelperSettings.getInstance().parseGlobalHeaders()
+        val mergedHeaders = CurlCommandBuilder.mergeHeaders(globalHeaders, headerModel.toPairs())
+        val rawUrl = normalizeInitialUrl(urlField.text.trim(), currentServerPort)
+        val effectiveBodyText = when (selectedBodyType) {
+            BodyType.NONE, BodyType.FORM_DATA, BodyType.BINARY -> ""
+            BodyType.URL_ENCODED -> urlEncodedModel.toPairs()
+                .filter { it.first.isNotBlank() }
+                .joinToString("&") { (k, v) -> "${encode(k)}=${encode(v)}" }
+            else -> requestBodyArea.text
+        }
+        val curl = CurlCommandBuilder.build(
+            method = methodBox.selectedItem?.toString().orEmpty(),
+            rawUrl = rawUrl,
+            pathParams = pathModel.toPairs(),
+            queryParams = queryModel.toPairs(),
+            headers = mergedHeaders,
+            cookies = cookieModel.toPairs(),
+            contentType = selectedBodyType.contentType,
+            bodyText = effectiveBodyText,
+            formDataRows = if (selectedBodyType == BodyType.FORM_DATA) formDataModel.toRows() else emptyList(),
+            binaryFilePath = if (selectedBodyType == BodyType.BINARY) binaryPath else "",
+        )
+        CopyPasteManager.getInstance().setContents(StringSelection(curl))
+        if (!project.isDisposed) {
+            NotificationGroupManager.getInstance()
+                .getNotificationGroup("ApiHelper")
+                .createNotification(
+                    ApiHelperBundle.message("debug.notification.curl.copied"),
+                    NotificationType.INFORMATION,
+                )
+                .notify(project)
+        }
+    }
+
     private fun sendRequest() {
+        val rawUrl = urlField.text.trim()
+        if (rawUrl.isEmpty()) {
+            requestStatusLabel.text = ApiHelperBundle.message("debug.status.url.empty")
+            requestStatusLabel.foreground = UIUtil.getErrorForeground()
+            urlField.requestFocusInWindow()
+            return
+        }
+        if (selectedBodyType == BodyType.BINARY) {
+            val filePath = binaryPath.trim()
+            if (filePath.isEmpty() || !Files.isRegularFile(Path.of(filePath))) {
+                requestStatusLabel.text = ApiHelperBundle.message("debug.status.file.missing", filePath)
+                requestStatusLabel.foreground = UIUtil.getErrorForeground()
+                return
+            }
+        }
+        if (selectedBodyType == BodyType.FORM_DATA) {
+            val missingFile = formDataModel.toRows()
+                .firstOrNull { it.type == BodyFormDataTableModel.TYPE_FILE && (it.value.isBlank() || !Files.isRegularFile(Path.of(it.value.trim()))) }
+            if (missingFile != null) {
+                requestStatusLabel.text = ApiHelperBundle.message("debug.status.file.missing", missingFile.value)
+                requestStatusLabel.foreground = UIUtil.getErrorForeground()
+                return
+            }
+        }
+
+        saveCurrentDraftIfLoaded()
+        val requestDraftSnapshot = snapshotCurrentDraft()
+        val globalHeaders = ApiHelperSettings.getInstance().parseGlobalHeaders()
+        val mergedHeaders = CurlCommandBuilder.mergeHeaders(globalHeaders, headerModel.toPairs())
         val input = DebugRequestInput(
             method = methodBox.selectedItem?.toString().orEmpty(),
-            url = urlField.text.trim(),
+            url = rawUrl,
             query = queryModel.toPairs(),
             path = pathModel.toPairs(),
-            headers = headerModel.toPairs(),
+            headers = mergedHeaders,
             cookies = cookieModel.toPairs(),
             bodyType = selectedBodyType,
             body = requestBodyArea.text,
@@ -496,6 +836,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                         body = responseBody.text,
                         truncated = responseBody.truncated,
                         elapsedMs = elapsedMs,
+                        requestDraft = requestDraftSnapshot,
                     )
                     contentTabs.selectedIndex = 1
                 }
@@ -517,6 +858,17 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                         requestStatusLabel.foreground = UIUtil.getErrorForeground()
                         lastResponseBody = e.message ?: e::class.java.name
                         renderResponseBody()
+                        DebugDraftService.of(project).addHistory(
+                            DebugHistoryEntry(
+                                timestampText = DebugDraftService.currentTimeText(),
+                                draft = requestDraftSnapshot,
+                                statusCode = null,
+                                elapsedMs = elapsedMs,
+                                responseBody = lastResponseBody,
+                                responseHeaders = "",
+                                responseCookies = "",
+                            ),
+                        )
                         contentTabs.selectedIndex = 1
                     }
                 }
@@ -586,7 +938,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
     private object IdeProxySelector : ProxySelector() {
 
         override fun select(uri: URI): List<Proxy> =
-            runCatching { CommonProxy.getInstance().select(uri) }.getOrDefault(emptyList())
+            runCatching { JdkProxyProvider.getInstance().proxySelector.select(uri) }.getOrDefault(emptyList())
 
         override fun connectFailed(uri: URI, socketAddress: SocketAddress, exception: IOException) {
             // 交由 Java HttpClient 内置的重试与直连回退处理，不做额外干预
@@ -644,27 +996,42 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         body: String,
         truncated: Boolean,
         elapsedMs: Long,
+        requestDraft: EndpointDebugDraft,
     ) {
         requestStatusLabel.text = ApiHelperBundle.message(
             "debug.status.done",
             statusCode,
             elapsedMs,
         )
-        requestStatusLabel.foreground = UIUtil.getContextHelpForeground()
+        requestStatusLabel.foreground = statusForegroundColor(statusCode)
         lastResponseBody = if (truncated) {
             body + ApiHelperBundle.message("debug.response.truncated", MAX_RESPONSE_PREVIEW_BYTES / MB)
         } else {
             body
         }
+        autoSelectResponseBodyType(headers, body)
         renderResponseBody()
-        responseHeaderArea.text = headers.map().entries
+        val headersText = headers.map().entries
             .sortedBy { it.key }
             .joinToString("\n") { (name, values) -> "$name: ${values.joinToString(", ")}" }
+        responseHeaderArea.text = headersText
         responseHeaderArea.caretPosition = 0
-        responseCookieArea.text = headers.allValues("set-cookie")
+        val cookiesText = headers.allValues("set-cookie")
             .flatMap { value -> runCatching { HttpCookie.parse(value) }.getOrDefault(emptyList()) }
             .joinToString("\n") { cookie -> "${cookie.name}=${cookie.value}" }
+        responseCookieArea.text = cookiesText
         responseCookieArea.caretPosition = 0
+        DebugDraftService.of(project).addHistory(
+            DebugHistoryEntry(
+                timestampText = DebugDraftService.currentTimeText(),
+                draft = requestDraft,
+                statusCode = statusCode,
+                elapsedMs = elapsedMs,
+                responseBody = lastResponseBody,
+                responseHeaders = headersText,
+                responseCookies = cookiesText,
+            ),
+        )
     }
 
     private fun renderResponseBody() {
@@ -675,6 +1042,29 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         }
         responseBodyArea.caretPosition = 0
     }
+
+    private fun autoSelectResponseBodyType(headers: HttpHeaders, body: String) {
+        val contentType = headers.firstValue("content-type").orElse("").lowercase()
+        val trimmed = body.trimStart()
+        val detected = when {
+            contentType.contains("json") || trimmed.startsWith("{") || trimmed.startsWith("[") -> ResponseBodyType.JSON
+            contentType.contains("html") || trimmed.startsWith("<!doctype html", ignoreCase = true) || trimmed.startsWith("<html", ignoreCase = true) -> ResponseBodyType.HTML
+            contentType.contains("xml") || trimmed.startsWith("<?xml", ignoreCase = true) -> ResponseBodyType.XML
+            contentType.contains("text/plain") -> ResponseBodyType.TEXT
+            else -> null
+        }
+        if (detected != null && responseBodyTypeBox.selectedItem != detected) {
+            responseBodyTypeBox.selectedItem = detected
+        }
+    }
+
+    private fun statusForegroundColor(statusCode: Int): Color =
+        when (statusCode) {
+            in 200..299 -> JBColor(Color(0x177245), Color(0x7ED69C))
+            in 300..399 -> JBColor(Color(0x966313), Color(0xE0B56B))
+            in 400..599 -> UIUtil.getErrorForeground()
+            else -> UIUtil.getContextHelpForeground()
+        }
 
     private fun formatResponseJson(raw: String): String {
         val trimmed = raw.trim()
@@ -687,6 +1077,11 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         val value = rawUrl.trim()
         if (value.startsWith("http://") || value.startsWith("https://")) return value
         val path = if (value.startsWith("/")) value else "/$value"
+        val selectedOption = environmentBox.selectedItem as? EnvironmentOption
+        val customBase = selectedOption?.baseUrl?.trim()?.trimEnd('/')
+        if (!customBase.isNullOrEmpty()) {
+            return "$customBase$path"
+        }
         return "http://localhost:$port$path"
     }
 
@@ -744,7 +1139,12 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
     private fun resolveDebugParams(item: EndpointTreeItem): DebugAutoParams {
         return ApplicationManager.getApplication().runReadAction(Computable {
             val method = item.pointer?.element?.takeIf { it.isValid } ?: return@Computable DebugAutoParams()
-            val auto = DebugAutoParamsBuilder()
+            val path = mutableListOf<Pair<String, String>>()
+            val query = mutableListOf<Pair<String, String>>()
+            val headers = mutableListOf<Pair<String, String>>()
+            val cookies = mutableListOf<Pair<String, String>>()
+            val bodyCandidateParams = mutableListOf<com.intellij.psi.PsiParameter>()
+
             val useQueryForUnannotated = item.httpMethod == HttpMethod.GET ||
                     item.httpMethod == HttpMethod.DELETE ||
                     item.httpMethod == HttpMethod.HEAD ||
@@ -754,71 +1154,55 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                 when {
                     EndpointParameterResolver.hasAnnotation(parameter, SpringAnnotations.PATH_VARIABLE) -> {
                         val param = EndpointParameterResolver.annotatedParameter(parameter, SpringAnnotations.PATH_VARIABLE)
-                        auto.path += param.name to param.sampleValue
+                        path += param.name to param.sampleValue
                     }
                     EndpointParameterResolver.hasAnnotation(parameter, SpringAnnotations.REQUEST_PARAM) -> {
                         val param = EndpointParameterResolver.annotatedParameter(parameter, SpringAnnotations.REQUEST_PARAM)
-                        auto.query += param.name to param.sampleValue
+                        query += param.name to param.sampleValue
                     }
                     EndpointParameterResolver.hasAnnotation(parameter, SpringAnnotations.REQUEST_HEADER) -> {
                         val param = EndpointParameterResolver.annotatedParameter(parameter, SpringAnnotations.REQUEST_HEADER)
-                        auto.headers += param.name to param.sampleValue
+                        headers += param.name to param.sampleValue
                     }
                     EndpointParameterResolver.hasAnnotation(parameter, SpringAnnotations.COOKIE_VALUE) -> {
                         val param = EndpointParameterResolver.annotatedParameter(parameter, SpringAnnotations.COOKIE_VALUE)
-                        auto.cookies += param.name to param.sampleValue
+                        cookies += param.name to param.sampleValue
                     }
                     EndpointParameterResolver.hasAnnotation(parameter, SpringAnnotations.REQUEST_BODY) -> {
-                        auto.body += EndpointParameterResolver
-                            .bodyParameters(parameter, SpringAnnotations.REQUEST_BODY)
-                            .map { it.name to it.sampleValue }
+                        bodyCandidateParams += parameter
                     }
                     EndpointParameterResolver.hasQueryMapAnnotation(parameter) -> {
-                        auto.query += EndpointParameterResolver.queryParameters(parameter).map { it.name to it.sampleValue }
+                        query += EndpointParameterResolver.queryParameters(parameter)
+                            .filter { !it.name.contains('.') && !it.name.contains('[') }
+                            .map { it.name to it.sampleValue }
                     }
                     useQueryForUnannotated -> {
-                        auto.query += EndpointParameterResolver.queryParameters(parameter).map { it.name to it.sampleValue }
+                        query += EndpointParameterResolver.queryParameters(parameter)
+                            .filter { !it.name.contains('.') && !it.name.contains('[') }
+                            .map { it.name to it.sampleValue }
                     }
                     else -> {
-                        auto.body += EndpointParameterResolver.bodyParameters(parameter).map { it.name to it.sampleValue }
+                        bodyCandidateParams += parameter
                     }
                 }
             }
-            auto.build()
-        })
-    }
-
-    private class DebugAutoParamsBuilder {
-        val path = mutableListOf<Pair<String, String>>()
-        val query = mutableListOf<Pair<String, String>>()
-        val headers = mutableListOf<Pair<String, String>>()
-        val cookies = mutableListOf<Pair<String, String>>()
-        val body = mutableListOf<Pair<String, String>>()
-
-        fun build(): DebugAutoParams {
-            val bodyText = body
-                .filter { it.first.isNotBlank() }
-                .distinctBy { it.first }
-                .takeIf { it.isNotEmpty() }
-                ?.joinToString(separator = ",\n", prefix = "{\n", postfix = "\n}") {
-                    "  \"${it.first}\": ${jsonSampleValue(it.second)}"
-                }
-                .orEmpty()
-            return DebugAutoParams(
+            val bodyText = EndpointParameterResolver.buildJsonSampleForParameters(bodyCandidateParams)
+            DebugAutoParams(
                 path = path.distinctBy { it.first },
                 query = query.distinctBy { it.first },
                 headers = headers.distinctBy { it.first },
                 cookies = cookies.distinctBy { it.first },
                 bodyText = bodyText,
             )
-        }
+        })
+    }
 
-        private fun jsonSampleValue(value: String): String {
-            return when (value) {
-                "true", "false", "0" -> value
-                else -> "\"\""
-            }
-        }
+    private data class EnvironmentOption(
+        val name: String,
+        val displayLabel: String,
+        val baseUrl: String?,
+    ) {
+        override fun toString(): String = displayLabel
     }
 
     private data class DebugAutoParams(

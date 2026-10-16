@@ -1,23 +1,31 @@
 package com.lizhuolun.apihelper.ui
 
 import com.intellij.icons.AllIcons
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionPlaces
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Computable
-import com.intellij.ui.components.JBLabel
+import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiMethod
+import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.JBPanel
-import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import org.jetbrains.uast.UMethod
+import org.jetbrains.uast.getUastParentOfType
 import com.lizhuolun.apihelper.ApiHelperBundle
 import com.lizhuolun.apihelper.cache.BilateralMappingCacheService
 import com.lizhuolun.apihelper.core.EndpointKind
@@ -30,14 +38,17 @@ import com.lizhuolun.apihelper.ui.debug.EndpointDebugPanel
 import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.Color
+import java.awt.Cursor
 import java.awt.FlowLayout
 import java.awt.Font
+import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
 import javax.swing.BorderFactory
 import javax.swing.Icon
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
+import javax.swing.KeyStroke
 import javax.swing.SwingConstants
 import javax.swing.UIManager
 import javax.swing.event.DocumentEvent
@@ -70,9 +81,18 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         isOpaque = false
     }
 
-    private val searchField = JBTextField().apply {
-        emptyText.text = ApiHelperBundle.message("toolwindow.filter.placeholder")
-        ApiHelperUiStyle.applyTextField(this)
+    private val searchField = SearchTextField(false).apply {
+        textEditor.emptyText.text = ApiHelperBundle.message("toolwindow.filter.placeholder")
+        ApiHelperUiStyle.applyTextField(textEditor)
+        textEditor.registerKeyboardAction(
+            {
+                if (isSearchVisible) {
+                    toggleSearch()
+                }
+            },
+            KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+            JComponent.WHEN_FOCUSED,
+        )
     }
     private val searchBoxPanel = JPanel(BorderLayout()).apply {
         isOpaque = true
@@ -81,9 +101,6 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
             BorderFactory.createMatteBorder(0, 0, 1, 0, ApiHelperUiStyle.borderColor()),
             BorderFactory.createEmptyBorder(6, 10, 6, 10),
         )
-        add(JBLabel(AllIcons.Actions.Search).apply {
-            border = BorderFactory.createEmptyBorder(0, 0, 0, 6)
-        }, BorderLayout.WEST)
         add(searchField, BorderLayout.CENTER)
     }
 
@@ -106,6 +123,8 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
     }
 
     private var isSearchVisible: Boolean = false
+    private var isGroupByModule: Boolean = false
+    private var currentPairingFilter: EndpointPairingFilter = EndpointPairingFilter.ALL
     private var activeMainCard: String = CARD_INTERFACE
     private var activeInterfaceTab: String = CARD_CONTROLLER
     private var controllerEndpointsLoaded: Boolean = false
@@ -140,7 +159,7 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         controllerTree.onDebugRequested = { showDebugPanel(it) }
 
         searchBoxPanel.isVisible = false
-        searchField.document.addDocumentListener(object : DocumentListener {
+        searchField.addDocumentListener(object : DocumentListener {
             override fun insertUpdate(e: DocumentEvent?) = onSearchTextChanged()
             override fun removeUpdate(e: DocumentEvent?) = onSearchTextChanged()
             override fun changedUpdate(e: DocumentEvent?) = onSearchTextChanged()
@@ -215,6 +234,9 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
      */
     fun createTitleActions(): List<AnAction> {
         return listOf(
+            TopBarAction(null, ApiHelperBundle.message("action.ApiHelper.GotoEndpoint.text"), AllIcons.Actions.Find) {
+                com.lizhuolun.apihelper.ui.search.GotoEndpointAction.showPopup(project)
+            },
             TopBarAction(null, ApiHelperBundle.message("toolwindow.action.settings"), AllIcons.General.Settings) {
                 ShowSettingsUtil.getInstance().showSettingsDialog(project, ApiHelperConfigurable::class.java)
             },
@@ -243,6 +265,7 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
 
     private fun mainNavButton(label: String, card: String): JComponent {
         val button = JLabel(label).apply {
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             foreground = UIUtil.getContextHelpForeground()
             font = font?.deriveFont(Font.PLAIN, 12f)
             border = BorderFactory.createEmptyBorder(JBUI.scale(5), JBUI.scale(10), JBUI.scale(5), JBUI.scale(10))
@@ -261,9 +284,25 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
     }
 
     private fun buildToolbar(): JComponent {
+        val filterGroup = DefaultActionGroup(
+            ApiHelperBundle.message("toolwindow.action.filter.pairing"),
+            true,
+        ).apply {
+            templatePresentation.icon = AllIcons.General.Filter
+            add(PairingFilterToggleAction(ApiHelperBundle.message("toolwindow.filter.pairing.all"), EndpointPairingFilter.ALL))
+            add(PairingFilterToggleAction(ApiHelperBundle.message("toolwindow.filter.pairing.paired"), EndpointPairingFilter.PAIRED_ONLY))
+            add(PairingFilterToggleAction(ApiHelperBundle.message("toolwindow.filter.pairing.unpaired"), EndpointPairingFilter.UNPAIRED_ONLY))
+        }
+
         val actionGroup = DefaultActionGroup().apply {
             add(ToolbarAction(ApiHelperBundle.message("toolwindow.action.refresh"), AllIcons.Actions.Refresh) { refresh(forceScan = true) })
             add(ToolbarAction(ApiHelperBundle.message("toolwindow.action.search"), AllIcons.Actions.Search) { toggleSearch() })
+            add(ToolbarAction(ApiHelperBundle.message("toolwindow.action.locate.current"), AllIcons.General.Locate) {
+                locateCurrentEditorEndpoint()
+            })
+            addSeparator()
+            add(GroupByModuleToggleAction())
+            add(filterGroup)
             addSeparator()
             add(ToolbarAction(ApiHelperBundle.message("toolwindow.action.expand.all"), AllIcons.Actions.Expandall) {
                 activeTree().expandAll()
@@ -317,6 +356,7 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
 
     private fun ideTabButton(label: String, card: String): JComponent {
         val button = JLabel(label).apply {
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             foreground = UIUtil.getContextHelpForeground()
             font = font?.deriveFont(Font.PLAIN, 12f)
             border = BorderFactory.createEmptyBorder(JBUI.scale(7), JBUI.scale(10), JBUI.scale(7), JBUI.scale(10))
@@ -355,17 +395,32 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
     private fun updateIdeTabCounts(total: Int, filtered: Int) {
         ideTabButtons.forEach { btn ->
             when (btn.getClientProperty(KEY_CARD)) {
-                CARD_CONTROLLER -> btn.text = controllerTabTitle(controllerTree.getTotalCount())
-                CARD_FEIGN -> btn.text = feignTabTitle(feignTree.getTotalCount())
+                CARD_CONTROLLER -> btn.text = controllerTabTitle(
+                    controllerTree.getTotalCount(),
+                    controllerTree.getFilteredCount(),
+                )
+                CARD_FEIGN -> btn.text = feignTabTitle(
+                    feignTree.getTotalCount(),
+                    feignTree.getFilteredCount(),
+                )
             }
         }
     }
 
-    private fun controllerTabTitle(count: Int): String =
-        "${ApiHelperBundle.message("toolwindow.tab.controller")} [$count]"
+    private fun controllerTabTitle(total: Int, filtered: Int): String =
+        formatTabTitle(ApiHelperBundle.message("toolwindow.tab.controller"), total, filtered)
 
-    private fun feignTabTitle(count: Int): String =
-        "${ApiHelperBundle.message("toolwindow.tab.feign")} [$count]"
+    private fun feignTabTitle(total: Int, filtered: Int): String =
+        formatTabTitle(ApiHelperBundle.message("toolwindow.tab.feign"), total, filtered)
+
+    private fun formatTabTitle(baseTitle: String, total: Int, filtered: Int): String {
+        val hasFilter = searchField.text.isNotBlank() || currentPairingFilter != EndpointPairingFilter.ALL
+        return if (hasFilter && filtered != total) {
+            "$baseTitle [$filtered/$total]"
+        } else {
+            "$baseTitle [$total]"
+        }
+    }
 
     private fun showInterfaceList() {
         activeMainCard = CARD_INTERFACE
@@ -390,6 +445,68 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
     }
 
     /**
+     * 重新加载调试面板的环境列表配置。
+     */
+    fun reloadDebugEnvironments() {
+        debugPanel.reloadEnvironments()
+    }
+
+    /**
+     * 在端点树中定位并选中当前编辑器光标所在的接口方法。
+     */
+    fun locateCurrentEditorEndpoint() {
+        val method = resolveCurrentEditorMethod()
+        if (method == null) {
+            notifyBalloon(ApiHelperBundle.message("toolwindow.notification.locate.not.found"))
+            return
+        }
+        showInterfaceList()
+        if (trySelectMethodInTrees(method)) {
+            return
+        }
+        if (searchField.text.isNotBlank() || currentPairingFilter != EndpointPairingFilter.ALL) {
+            searchField.text = ""
+            applyPairingFilter(EndpointPairingFilter.ALL)
+            if (trySelectMethodInTrees(method)) {
+                return
+            }
+        }
+        notifyBalloon(ApiHelperBundle.message("toolwindow.notification.locate.not.found"))
+    }
+
+    private fun trySelectMethodInTrees(method: PsiMethod): Boolean {
+        if (controllerTree.containsMethod(method)) {
+            selectInterfaceTab(CARD_CONTROLLER)
+            if (controllerTree.selectMethod(method)) return true
+        }
+        if (feignTree.containsMethod(method)) {
+            selectInterfaceTab(CARD_FEIGN)
+            if (feignTree.selectMethod(method)) return true
+        }
+        return false
+    }
+
+    private fun resolveCurrentEditorMethod(): PsiMethod? {
+        return ApplicationManager.getApplication().runReadAction(Computable {
+            val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: return@Computable null
+            val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: return@Computable null
+            val offset = editor.caretModel.offset
+            val element = psiFile.findElementAt(offset)
+                ?: psiFile.findElementAt((offset - 1).coerceAtLeast(0))
+                ?: return@Computable null
+            element.getUastParentOfType<UMethod>( false)?.javaPsi
+        })
+    }
+
+    private fun notifyBalloon(content: String) {
+        if (project.isDisposed) return
+        NotificationGroupManager.getInstance()
+            .getNotificationGroup("ApiHelper")
+            .createNotification(content, NotificationType.INFORMATION)
+            .notify(project)
+    }
+
+    /**
      * 当前是否展示接口列表。
      */
     fun isInterfaceListVisible(): Boolean = activeMainCard == CARD_INTERFACE
@@ -404,7 +521,7 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         isSearchVisible = !isSearchVisible
         searchBoxPanel.isVisible = isSearchVisible && activeMainCard == CARD_INTERFACE
         if (isSearchVisible) {
-            searchField.requestFocusInWindow()
+            searchField.textEditor.requestFocusInWindow()
         } else {
             searchField.text = ""
         }
@@ -480,6 +597,44 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         override fun actionPerformed(e: AnActionEvent) {
             action()
         }
+    }
+
+    private inner class GroupByModuleToggleAction : ToggleAction(
+        ApiHelperBundle.message("toolwindow.action.group.module"),
+        null,
+        AllIcons.Actions.GroupByModule,
+    ) {
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+        override fun isSelected(e: AnActionEvent): Boolean = isGroupByModule
+
+        override fun setSelected(e: AnActionEvent, state: Boolean) {
+            isGroupByModule = state
+            controllerTree.setGroupByModule(state)
+            feignTree.setGroupByModule(state)
+        }
+    }
+
+    private inner class PairingFilterToggleAction(
+        text: String,
+        private val filter: EndpointPairingFilter,
+    ) : ToggleAction(text) {
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+        override fun isSelected(e: AnActionEvent): Boolean = currentPairingFilter == filter
+
+        override fun setSelected(e: AnActionEvent, state: Boolean) {
+            if (state) {
+                applyPairingFilter(filter)
+            }
+        }
+    }
+
+    private fun applyPairingFilter(filter: EndpointPairingFilter) {
+        currentPairingFilter = filter
+        controllerTree.setPairingFilter(filter)
+        feignTree.setPairingFilter(filter)
+        updateSearchBadge()
     }
 
     private inner class TopBarAction(

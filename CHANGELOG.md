@@ -2,6 +2,32 @@
 
 本文件记录 ApiHelper 插件的版本变更。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.1.0] - 2026-10-16
+
+### 新增
+
+- **全局快捷接口搜索弹窗（Search API Endpoint）**：新增 `Navigate → 搜索 API 接口...`（快捷键 `Ctrl+Alt+\` / `Cmd+Opt+\` 及工具窗口标题栏按钮），支持多关键词检索全工程接口，按 `Enter` 跳转源码、`Shift+Enter` 直接跳转对端接口、`Ctrl/Cmd+Enter` 直接进入接口调试。
+- **全局公共 Header 与多环境 Base URL 切换**：在 Settings → Tools → ApiHelper 中支持配置全局公共请求头（如 `Authorization`、`X-Tenant-Id`）与多环境 Base URL（如 `Local`、`Dev`、`Test`），调试面板顶部支持一键切换环境。
+- **全场景一键复制为 cURL**：在端点列表右键菜单、编辑器 Controller Gutter 右键菜单与调试面板工具栏均支持一键导出包含 Path、Query、全局与接口级 Header、Cookie、Body 的标准 `curl` 命令；Controller Gutter 右键菜单同步支持直接“复制接口文档”。
+- **调试请求历史记录（History）与草稿记忆**：调试面板自动记录当前会话最近 30 条已发送的请求与响应快照，点击“历史”即可一键回放任意历史请求与响应结果；同时按端点记忆未发送的参数草稿，支持“重置”回源码初始参数。
+- **按模块分组视图与配对状态筛选**：工具栏新增“按模块分组”开关与“按配对状态筛选”（全部接口 / 仅显示已配对 / 仅显示未配对孤儿接口），并在已配对的端点树节点旁展示方向标记，方便快速排查失效的孤儿接口。
+- **定位当前编辑器接口**：工具栏新增“定位当前编辑器接口”按钮，可根据当前打开源码的光标位置自动在 Controller 或 Feign 树中展开并选中对应接口节点。
+- **智能嵌套 JSON 生成与组合元注解识别**：支持递归展开嵌套 DTO 与集合（`List<T>`）生成结构化 JSON 请求体草稿，识别 `@JsonProperty` / `@SerializedName` / `@JSONField` 字段名以及 `@Schema(example)` / `@ApiModelProperty(example)` 示例值；同时支持识别一层自定义 Spring 组合元注解（如封装了 `@RestController` 与 `@RequestMapping` 的 `@ApiV1RestController`）。
+
+### 修复
+
+- 修复在 IntelliJ IDEA 2026.3 EAP 下的废弃 API 告警：用 `JdkProxyProvider` 替代已标记移除的 `CommonProxy`，用 `DynamicBundle(Class, String)` 构造器替代单参构造器。
+- 修复 `EndpointParameterResolver` 展开嵌套响应对象字段时局部变量遮蔽导致源码注释缓存未复用的问题。
+- 修复调试参数表格在编辑单元格后直接点击“发送”按钮时未自动提交当前单元格输入的问题。
+- 修复中文语言包中 `debug.action.upload` 未汉化的问题。
+
+### 优化
+
+- 工具窗口搜索框升级为 IDE 原生 `SearchTextField`（自带清空按钮，支持按 `ESC` 快捷收起），并为端点树接入 `TreeSpeedSearch` 键盘直输检索。
+- 工具窗口 `Controller` 与 `Feign / HttpExchange` Tab 在过滤时实时显示 `[过滤数/总数]`，调试页请求参数 Tab（`Query`、`Path`、`Headers`、`Cookies`）动态显示参数数量。
+- 端点列表右键菜单新增“跳转到源码”，并为复制 URL、复制 cURL、复制接口文档、未找到对端接口等操作统一补齐气泡通知反馈。
+- 调试面板体验升级：支持 URL 输入框按 `Enter` 直接发送、发送前校验 URL 与本地文件是否存在、响应状态码按 `2xx`/`3xx`/`4xx-5xx` 语义化着色、根据响应头与内容自动切换响应格式视图，以及新增响应内容一键复制按钮。
+
 ## [1.0.3] - 2026-08-26
 
 ### 修复
@@ -69,6 +95,7 @@
 - 支持 Java 与 Kotlin 源码
 - 支持中英双语界面
 
+[1.1.0]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.1.0
 [1.0.3]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.3
 [1.0.2]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.2
 [1.0.1]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.1

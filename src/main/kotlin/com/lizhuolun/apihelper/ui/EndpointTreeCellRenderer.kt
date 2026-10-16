@@ -3,13 +3,17 @@ package com.lizhuolun.apihelper.ui
 import com.intellij.icons.AllIcons
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import com.lizhuolun.apihelper.ApiHelperBundle
+import com.lizhuolun.apihelper.core.EndpointKind
 import com.lizhuolun.apihelper.core.HttpMethod
+import com.lizhuolun.apihelper.provider.RestIcons
 import com.lizhuolun.apihelper.ui.component.HttpMethodBadge
 import com.lizhuolun.apihelper.ui.component.RoundedBadgeLabel
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
+import java.awt.FlowLayout
 import java.awt.Font
 import java.awt.Graphics
 import java.awt.Graphics2D
@@ -38,10 +42,19 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
         font = UIManager.getFont("Label.font")?.deriveFont(Font.PLAIN, 12f) ?: font.deriveFont(Font.PLAIN, 12f)
         border = BorderFactory.createEmptyBorder(0, 0, 0, 0)
     }
+    private val counterpartIconLabel = JLabel().apply {
+        border = BorderFactory.createEmptyBorder(0, 0, 0, JBUI.scale(4))
+        isVisible = false
+    }
     private val methodNameLabel = JLabel().apply {
         font = UIManager.getFont("Label.font")?.deriveFont(Font.PLAIN, 11f) ?: font.deriveFont(Font.PLAIN, 11f)
         border = BorderFactory.createEmptyBorder(0, 0, 0, 0)
         horizontalAlignment = JLabel.RIGHT
+    }
+    private val endpointRightPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0)).apply {
+        isOpaque = false
+        add(counterpartIconLabel)
+        add(methodNameLabel)
     }
 
     private val typeIconLabel = JLabel()
@@ -65,7 +78,7 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
         border = BorderFactory.createEmptyBorder(JBUI.scale(3), JBUI.scale(10), JBUI.scale(3), JBUI.scale(10))
         add(methodBadge, BorderLayout.WEST)
         add(urlLabel, BorderLayout.CENTER)
-        add(methodNameLabel, BorderLayout.EAST)
+        add(endpointRightPanel, BorderLayout.EAST)
     }
 
     private val groupPanel = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
@@ -129,6 +142,15 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
             count = ""
         }
 
+        if (node.isModuleGroup) {
+            packageLabel.text = ""
+            classNameLabel.text = className
+            groupCountBadge.text = count
+            typeIconLabel.icon = AllIcons.Nodes.Module
+            toolTipText = className
+            return
+        }
+
         val lastDot = className.lastIndexOf('.')
         if (lastDot > 0) {
             packageLabel.text = className.substring(0, lastDot + 1)
@@ -147,10 +169,19 @@ class EndpointTreeCellRenderer : JPanel(BorderLayout()), TreeCellRenderer {
         methodBadge.method = item.httpMethod
         urlLabel.text = item.url
         methodNameLabel.text = item.methodName
+        counterpartIconLabel.isVisible = item.hasCounterpart
+        if (item.hasCounterpart) {
+            counterpartIconLabel.icon = if (item.kind == EndpointKind.CONTROLLER) {
+                RestIcons.JUMP_CONTROLLER_TO_FEIGN
+            } else {
+                RestIcons.JUMP_FEIGN_TO_CONTROLLER
+            }
+        }
         toolTipText = listOfNotNull(
             "${item.httpMethod.name} ${item.url}",
             item.className,
             item.moduleName.takeIf { it.isNotBlank() }?.let { "module: $it" },
+            if (item.hasCounterpart) ApiHelperBundle.message("toolwindow.tooltip.paired") else null,
         ).joinToString("<br>", prefix = "<html>", postfix = "</html>")
     }
 

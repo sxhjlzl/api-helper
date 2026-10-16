@@ -54,6 +54,14 @@ class EndpointToolWindowService(private val project: Project) {
     }
 
     /**
+     * 重新加载调试面板的环境选择器配置。
+     */
+    fun reloadDebugEnvironments() {
+        if (project.isDisposed) return
+        panel?.reloadDebugEnvironments()
+    }
+
+    /**
      * 打开工具窗口并切换到指定 Controller 端点的调试页。
      *
      * @param info Controller 端点映射

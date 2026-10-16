@@ -278,6 +278,56 @@ class BilateralMappingCacheServiceTest : BasePlatformTestCase() {
         assertEquals("hello", targetMethod?.name)
     }
 
+    fun testScansCustomCompositeMetaRestController() {
+        addSpringAnnotations()
+        myFixture.addFileToProject(
+            "org/springframework/web/bind/annotation/RequestMapping.java",
+            """
+                package org.springframework.web.bind.annotation;
+
+                public @interface RequestMapping {
+                    String[] value() default {};
+                    String[] path() default {};
+                }
+            """.trimIndent(),
+        )
+        myFixture.addFileToProject(
+            "example/ApiV1RestController.java",
+            """
+                package example;
+
+                import org.springframework.web.bind.annotation.RequestMapping;
+                import org.springframework.web.bind.annotation.RestController;
+
+                @RestController
+                @RequestMapping("/api/v1")
+                public @interface ApiV1RestController {
+                    String value() default "";
+                }
+            """.trimIndent(),
+        )
+        myFixture.configureByText(
+            "CustomMetaController.java",
+            """
+                package example;
+
+                import org.springframework.web.bind.annotation.GetMapping;
+
+                @ApiV1RestController
+                class CustomMetaController {
+                    @GetMapping("/users")
+                    String list() {
+                        return "ok";
+                    }
+                }
+            """.trimIndent(),
+        )
+
+        val endpoints = EndpointScanner.scanControllerEndpoints(project, null)
+        assertSize(1, endpoints)
+        assertEquals("/api/v1/users", endpoints.single().url)
+    }
+
     private fun addSpringAnnotations() {
         myFixture.addFileToProject(
             "org/springframework/web/bind/annotation/RestController.java",

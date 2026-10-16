@@ -45,14 +45,19 @@ object AnnotationParser {
         isFeignInterface(psiClass) || isHttpExchangeInterface(psiClass)
 
     /**
-     * 是否为 Spring MVC Controller / RestController。
-     * 注意：Controller 必须是 class 而不是 interface。
+     * 是否为 Spring MVC Controller / RestController（支持一层自定义组合元注解，如 @ApiRestController）。
+     * 注意：Controller 必须是普通 class 而不是 interface 或 annotation。
      */
     fun isControllerClass(psiClass: PsiClass): Boolean {
-        if (psiClass.isInterface) return false
+        if (psiClass.isInterface || psiClass.isAnnotationType) return false
         val modifierList = psiClass.modifierList ?: return false
-        return modifierList.hasAnnotation(SpringAnnotations.REST_CONTROLLER) ||
-                modifierList.hasAnnotation(SpringAnnotations.CONTROLLER)
+        if (modifierList.hasAnnotation(SpringAnnotations.REST_CONTROLLER) ||
+            modifierList.hasAnnotation(SpringAnnotations.CONTROLLER)
+        ) {
+            return true
+        }
+        return findMetaAnnotation(psiClass, SpringAnnotations.REST_CONTROLLER) != null ||
+                findMetaAnnotation(psiClass, SpringAnnotations.CONTROLLER) != null
     }
 
     // ============ 方法上的 REST 注解定位 ============
@@ -98,7 +103,38 @@ object AnnotationParser {
                 ?: readAnnotationAttribute(it, "url")
                 ?: ""
         }
+        findMetaAnnotation(psiClass, SpringAnnotations.REQUEST_MAPPING)?.let { (customAnnotation, metaRequestMapping) ->
+            return readAnnotationAttribute(customAnnotation, "value")?.takeIf { it.isNotBlank() }
+                ?: readAnnotationAttribute(customAnnotation, "path")?.takeIf { it.isNotBlank() }
+                ?: readAnnotationAttribute(metaRequestMapping, "value")?.takeIf { it.isNotBlank() }
+                ?: readAnnotationAttribute(metaRequestMapping, "path")?.takeIf { it.isNotBlank() }
+                ?: ""
+        }
         return ""
+    }
+
+    /**
+     * 在类的直接注解上查找一层元注解（例如自定义 @ApiRestController 上标注了 @RestController 或 @RequestMapping）。
+     *
+     * @param psiClass 目标类
+     * @param targetMetaFqn 目标元注解全限定名
+     * @return 命中的 (类上的直接注解, 元注解定义上的目标注解) 二元组，未命中返回 null
+     */
+    private fun findMetaAnnotation(psiClass: PsiClass, targetMetaFqn: String): Pair<PsiAnnotation, PsiAnnotation>? {
+        val annotations = psiClass.modifierList?.annotations ?: return null
+        for (annotation in annotations) {
+            val fqn = annotation.qualifiedName ?: continue
+            if (fqn.startsWith("java.") || fqn.startsWith("kotlin.") || fqn.startsWith("org.springframework.")) {
+                continue
+            }
+            val annotationClass = annotation.nameReferenceElement?.resolve() as? PsiClass ?: continue
+            if (!annotationClass.isAnnotationType) continue
+            val meta = annotationClass.modifierList?.findAnnotation(targetMetaFqn)
+            if (meta != null) {
+                return annotation to meta
+            }
+        }
+        return null
     }
 
     // ============ 方法级路径与 HTTP 方法提取 ============
