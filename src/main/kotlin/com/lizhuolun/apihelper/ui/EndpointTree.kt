@@ -561,13 +561,15 @@ class EndpointTree(
             }
             val bodyJson = EndpointParameterResolver.buildJsonSampleForParameters(bodyCandidateParams)
             val mergedHeaders = CurlCommandBuilder.mergeHeaders(settings.parseGlobalHeaders(), headerParams)
+            val mergedQueries = CurlCommandBuilder.mergeHeaders(settings.parseGlobalQueries(), queryParams)
+            val mergedCookies = CurlCommandBuilder.mergeHeaders(settings.parseGlobalCookies(), cookieParams)
             return CurlCommandBuilder.build(
                 method = effectiveHttpMethod(item),
                 rawUrl = fullUrl,
                 pathParams = pathParams,
-                queryParams = queryParams,
+                queryParams = mergedQueries,
                 headers = mergedHeaders,
-                cookies = cookieParams,
+                cookies = mergedCookies,
                 contentType = if (bodyJson.isNotBlank()) "application/json; charset=UTF-8" else "",
                 bodyText = bodyJson,
             )

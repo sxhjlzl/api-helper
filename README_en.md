@@ -111,5 +111,5 @@ Then install `build/distributions/api-helper-<version>.zip` via `Settings` -> `P
 
 ## Version & Feedback
 
-- Current version: `1.1.0` (see [CHANGELOG_en.md](./CHANGELOG_en.md))
+- Current version: `1.1.1` (see [CHANGELOG_en.md](./CHANGELOG_en.md))
 - Issues and feature requests are welcome at [GitHub Issues](https://github.com/sxhjlzl/api-helper/issues). If ApiHelper helps your daily workflow, please consider giving the repository a **Star**!

@@ -148,5 +148,5 @@ src/main/kotlin/com/lizhuolun/apihelper/
 
 ## 版本与反馈
 
-- 当前版本：`1.1.0`（详见 [CHANGELOG.md](./CHANGELOG.md)）
+- 当前版本：`1.1.1`（详见 [CHANGELOG.md](./CHANGELOG.md)）
 - 欢迎通过 [GitHub Issues](https://github.com/sxhjlzl/api-helper/issues) 提交建议或反馈问题；如果 ApiHelper 对你的日常开发有帮助，欢迎点亮一颗 **Star**！

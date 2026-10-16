@@ -6,6 +6,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.util.xmlb.XmlSerializerUtil
+import com.lizhuolun.apihelper.ui.debug.DebugParameterRow
 
 /**
  * ApiHelper 全局设置，应用级 Service，通过 PersistentStateComponent 持久化到 IDE 配置目录。
@@ -44,10 +45,20 @@ class ApiHelperSettings : PersistentStateComponent<ApiHelperSettings.SettingsSta
         var requestTimeoutSeconds: Int = 60
 
         /**
-         * 全局公共请求头，多行文本，每行格式为 Name: Value 或 Name=Value。
+         * 全局公共请求头，多行文本，每行格式为 Name: Value 或 [disabled] Name: Value。
          * 发送调试请求或生成 cURL 时自动合并，单接口同名 Header 优先级更高。
          **/
         var globalHeadersText: String = ""
+
+        /**
+         * 全局公共 Query 参数，多行文本，每行格式为 Name=Value 或 [disabled] Name=Value。
+         **/
+        var globalQueriesText: String = ""
+
+        /**
+         * 全局公共 Cookie 参数，多行文本，每行格式为 Name=Value 或 [disabled] Name=Value。
+         **/
+        var globalCookiesText: String = ""
 
         /**
          * 调试环境 Base URL 列表，多行文本，每行格式为 环境名=http://host:port 或直接写 http://host:port。
@@ -61,12 +72,42 @@ class ApiHelperSettings : PersistentStateComponent<ApiHelperSettings.SettingsSta
     }
 
     /**
-     * 解析全局公共 Header 列表。
+     * 解析已启用的全局公共 Header 列表。
      *
      * @return 解析后的 (Header名, Header值) 列表
      */
     fun parseGlobalHeaders(): List<Pair<String, String>> =
-        parseKeyValueLines(internalState.globalHeadersText, charArrayOf(':', '='))
+        parseGlobalHeaderRows().filter { it.enabled }.map { it.name to it.value }
+
+    /**
+     * 解析全部全局公共 Header 行（含未勾选禁用项）。
+     */
+    fun parseGlobalHeaderRows(): List<DebugParameterRow> =
+        parseParameterRows(internalState.globalHeadersText, charArrayOf(':', '='))
+
+    /**
+     * 解析已启用的全局公共 Query 参数列表。
+     */
+    fun parseGlobalQueries(): List<Pair<String, String>> =
+        parseGlobalQueryRows().filter { it.enabled }.map { it.name to it.value }
+
+    /**
+     * 解析全部全局公共 Query 参数行（含未勾选禁用项）。
+     */
+    fun parseGlobalQueryRows(): List<DebugParameterRow> =
+        parseParameterRows(internalState.globalQueriesText, charArrayOf('=', ':'))
+
+    /**
+     * 解析已启用的全局公共 Cookie 参数列表。
+     */
+    fun parseGlobalCookies(): List<Pair<String, String>> =
+        parseGlobalCookieRows().filter { it.enabled }.map { it.name to it.value }
+
+    /**
+     * 解析全部全局公共 Cookie 参数行（含未勾选禁用项）。
+     */
+    fun parseGlobalCookieRows(): List<DebugParameterRow> =
+        parseParameterRows(internalState.globalCookiesText, charArrayOf('=', ':'))
 
     /**
      * 解析调试环境列表。
@@ -105,28 +146,50 @@ class ApiHelperSettings : PersistentStateComponent<ApiHelperSettings.SettingsSta
     }
 
     companion object {
+        private const val DISABLED_PREFIX = "[disabled]"
+
         fun getInstance(): ApiHelperSettings =
             ApplicationManager.getApplication().getService(ApiHelperSettings::class.java)
 
         /**
-         * 解析多行键值对配置文本，忽略空行与 # 注释行。
+         * 解析多行键值对配置文本（仅返回已启用项），忽略空行与 # 注释行。
          *
          * @param raw 原始多行文本
          * @param delimiters 允许的键值分隔符
          * @return 键值对列表
          */
         internal fun parseKeyValueLines(raw: String, delimiters: CharArray): List<Pair<String, String>> =
+            parseParameterRows(raw, delimiters)
+                .filter { it.enabled }
+                .map { it.name to it.value }
+
+        /**
+         * 解析带启用状态的参数行列表，支持 `[disabled] key: value` 标记未勾选行。
+         */
+        internal fun parseParameterRows(raw: String, delimiters: CharArray): List<DebugParameterRow> =
             raw.lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotEmpty() && !it.startsWith("#") }
-                .mapNotNull { line ->
+                .mapNotNull { rawLine ->
+                    val enabled = !rawLine.startsWith(DISABLED_PREFIX, ignoreCase = true)
+                    val line = if (enabled) rawLine else rawLine.substring(DISABLED_PREFIX.length).trim()
                     val idx = line.indexOfAny(delimiters)
                     if (idx <= 0) return@mapNotNull null
                     val key = line.substring(0, idx).trim()
                     val value = line.substring(idx + 1).trim()
-                    if (key.isEmpty()) null else key to value
+                    if (key.isEmpty()) null else DebugParameterRow(enabled = enabled, name = key, value = value)
                 }
                 .toList()
+
+        /**
+         * 将参数行列表序列化为多行持久化文本，保留未勾选行的 `[disabled]` 前缀。
+         */
+        internal fun formatParameterRows(rows: List<DebugParameterRow>, separator: String = ": "): String =
+            rows.filter { it.name.isNotBlank() }
+                .joinToString("\n") { row ->
+                    val prefix = if (row.enabled) "" else "$DISABLED_PREFIX "
+                    "$prefix${row.name.trim()}$separator${row.value}"
+                }
     }
 }
 

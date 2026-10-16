@@ -9,34 +9,63 @@ import com.lizhuolun.apihelper.ApiHelperBundle
 import com.lizhuolun.apihelper.settings.ApiHelperSettings
 import com.lizhuolun.apihelper.ui.component.ApiHelperUiStyle
 import java.awt.BorderLayout
+import java.awt.CardLayout
 import java.awt.Component
-import java.awt.Font
+import java.awt.Cursor
+import java.awt.FlowLayout
+import java.awt.Graphics
+import java.awt.Graphics2D
+import java.awt.RenderingHints
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import javax.swing.BorderFactory
+import javax.swing.Icon
 import javax.swing.JButton
+import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JTable
-import javax.swing.JToolBar
-import javax.swing.ListSelectionModel
 import javax.swing.table.TableCellRenderer
 
 /**
- * “全局参数”独立管理面板（对应顶部 Tab：全局参数）。
+ * “全局参数”独立管理面板（对应顶部一级标签页：全局参数）。
  *
- * 提供可视化表格管理全局公共 Header（如 Authorization、X-Tenant-Id），
- * 修改后实时写回 [ApiHelperSettings]，发送调试请求与生成 cURL 时自动合并生效。
+ * 采用与调试页一致的胶囊式子标签切换栏（Headers / Query / Cookies）+ 带启用复选框的网格参数表：
+ * - 支持分别管理全局公共 Header、全局公共 Query 参数与全局公共 Cookie；
+ * - 支持单独勾选/取消勾选某一项参数，未勾选项自动保留在表格中但不会随请求发送；
+ * - 修改后实时写回 [ApiHelperSettings]，发送调试请求与生成 cURL 时自动合并生效。
  *
+ * @param autoPersist 表格变更时是否立即写入全局设置（作为设置页子组件嵌入时可传 false）
  * @author lizhuolun
  * @date 2026/10/16
  */
-class GlobalParamsPanel : JPanel(BorderLayout()) {
+class GlobalParamsPanel(private val autoPersist: Boolean = true) : JPanel(BorderLayout()) {
 
     private val headerTableModel = DebugParameterTableModel(
         nameColumnKey = "debug.table.name",
         valueColumnKey = "debug.table.value",
         showDeleteColumn = true,
+        showEnabledColumn = true,
+    )
+    private val queryTableModel = DebugParameterTableModel(
+        nameColumnKey = "debug.table.name",
+        valueColumnKey = "debug.table.value",
+        showDeleteColumn = true,
+        showEnabledColumn = true,
+    )
+    private val cookieTableModel = DebugParameterTableModel(
+        nameColumnKey = "debug.table.name",
+        valueColumnKey = "debug.table.value",
+        showDeleteColumn = true,
+        showEnabledColumn = true,
     )
 
+    private val tabPills = LinkedHashMap<String, GlobalSubTabPill>()
+    private val cardLayout = CardLayout()
+    private val cardPanel = JPanel(cardLayout).apply {
+        isOpaque = false
+    }
+    private var activeTabKey: String = TAB_HEADERS
     private var updatingUi = false
 
     init {
@@ -44,77 +73,245 @@ class GlobalParamsPanel : JPanel(BorderLayout()) {
         background = UIUtil.getPanelBackground()
         border = BorderFactory.createEmptyBorder()
 
+        val leftTabs = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), JBUI.scale(4))).apply {
+            isOpaque = false
+            addSubTabPill(this, TAB_HEADERS, ApiHelperBundle.message("debug.tab.headers"))
+            addSubTabPill(this, TAB_QUERY, ApiHelperBundle.message("debug.tab.query"))
+            addSubTabPill(this, TAB_COOKIES, ApiHelperBundle.message("debug.tab.cookies"))
+        }
+
+        val rightActions = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(6), JBUI.scale(3))).apply {
+            isOpaque = false
+            add(JBLabel(ApiHelperBundle.message("toolwindow.global.headers.hint")).apply {
+                foreground = UIUtil.getContextHelpForeground()
+                font = ApiHelperUiStyle.smallFont()
+            })
+            add(HeaderIconButton(AllIcons.Actions.GC, ApiHelperBundle.message("debug.action.clear")).apply {
+                addActionListener { activeModel().clear() }
+            })
+        }
+
         val topBar = JPanel(BorderLayout()).apply {
             isOpaque = true
             background = UIUtil.getPanelBackground()
             border = BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, ApiHelperUiStyle.borderColor()),
-                BorderFactory.createEmptyBorder(6, 10, 6, 10),
+                BorderFactory.createMatteBorder(0, 0, 1, 0, ApiHelperUiStyle.subtleGridColor()),
+                BorderFactory.createEmptyBorder(0, 4, 0, 6),
             )
-            add(JBLabel(ApiHelperBundle.message("toolwindow.global.headers.hint")).apply {
-                foreground = UIUtil.getContextHelpForeground()
-                font = font?.deriveFont(Font.PLAIN, 12f)
-            }, BorderLayout.WEST)
-            val toolbar = JToolBar().apply {
-                isFloatable = false
-                isOpaque = false
-                border = BorderFactory.createEmptyBorder()
-                add(JButton(ApiHelperBundle.message("debug.action.clear")).apply {
-                    addActionListener { headerTableModel.clear() }
-                })
-            }
-            add(toolbar, BorderLayout.EAST)
+            add(leftTabs, BorderLayout.WEST)
+            add(rightActions, BorderLayout.EAST)
         }
 
-        val table = JTable(headerTableModel).apply {
-            fillsViewportHeight = true
-            rowHeight = JBUI.scale(30)
-            font = font?.deriveFont(12f)
-            tableHeader.font = tableHeader.font?.deriveFont(Font.PLAIN, 12f)
-            setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
-            tableHeader.reorderingAllowed = false
-            putClientProperty("terminateEditOnFocusLost", true)
+        cardPanel.add(buildTableScroll(headerTableModel, "Authorization", "Bearer <token>"), TAB_HEADERS)
+        cardPanel.add(buildTableScroll(queryTableModel, "tenantId", "1001"), TAB_QUERY)
+        cardPanel.add(buildTableScroll(cookieTableModel, "SESSION", "xyz"), TAB_COOKIES)
+
+        val listener: (javax.swing.event.TableModelEvent) -> Unit = {
+            if (!updatingUi) {
+                updateTabCounts()
+                if (autoPersist) {
+                    persistToSettings()
+                }
+            }
+        }
+        headerTableModel.addTableModelListener(listener)
+        queryTableModel.addTableModelListener(listener)
+        cookieTableModel.addTableModelListener(listener)
+
+        add(topBar, BorderLayout.NORTH)
+        add(cardPanel, BorderLayout.CENTER)
+
+        selectSubTab(TAB_HEADERS)
+        loadFromSettings()
+    }
+
+    private fun addSubTabPill(container: JPanel, key: String, title: String) {
+        val pill = GlobalSubTabPill(title) { selectSubTab(key) }
+        tabPills[key] = pill
+        container.add(pill)
+    }
+
+    private fun selectSubTab(key: String) {
+        activeTabKey = key
+        tabPills.forEach { (k, pill) -> pill.selected = (k == key) }
+        cardLayout.show(cardPanel, key)
+    }
+
+    private fun activeModel(): DebugParameterTableModel =
+        when (activeTabKey) {
+            TAB_QUERY -> queryTableModel
+            TAB_COOKIES -> cookieTableModel
+            else -> headerTableModel
+        }
+
+    private fun buildTableScroll(
+        model: DebugParameterTableModel,
+        exampleKey: String,
+        exampleVal: String,
+    ): JComponent {
+        val table = JTable(model).apply {
+            ApiHelperUiStyle.styleParameterTable(
+                table = this,
+                nameColumnIndex = 1,
+                valueColumnIndex = 2,
+                namePlaceholder = "+ ${ApiHelperBundle.message("debug.table.name")} (e.g. $exampleKey)",
+                valuePlaceholder = exampleVal,
+            )
+            columnModel.getColumn(1).preferredWidth = JBUI.scale(140)
             val deleteCol = columnModel.getColumn(columnCount - 1)
-            deleteCol.maxWidth = JBUI.scale(48)
-            deleteCol.preferredWidth = JBUI.scale(48)
+            deleteCol.maxWidth = JBUI.scale(34)
+            deleteCol.preferredWidth = JBUI.scale(34)
+            deleteCol.minWidth = JBUI.scale(34)
             deleteCol.cellRenderer = DeleteCellRenderer()
-            addMouseListener(object : java.awt.event.MouseAdapter() {
-                override fun mouseClicked(e: java.awt.event.MouseEvent) {
+            addMouseListener(object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) {
                     val r = rowAtPoint(e.point)
                     val c = columnAtPoint(e.point)
                     if (r >= 0 && c == columnCount - 1) {
-                        headerTableModel.removeRow(r)
+                        model.removeRow(r)
                     }
                 }
             })
         }
-
-        headerTableModel.addTableModelListener {
-            if (!updatingUi) {
-                val pairs = headerTableModel.toPairs().filter { it.first.isNotBlank() }
-                ApiHelperSettings.getInstance().state.globalHeadersText =
-                    pairs.joinToString("\n") { (k, v) -> "${k.trim()}: $v" }
-            }
-        }
-
-        add(topBar, BorderLayout.NORTH)
-        add(JBScrollPane(table).apply {
+        return JBScrollPane(table).apply {
             border = BorderFactory.createEmptyBorder()
-        }, BorderLayout.CENTER)
-
-        loadFromSettings()
+        }
     }
 
     /**
-     * 从全局设置同步公共 Header 到表格。
+     * 从全局设置同步公共 Headers / Query / Cookies 到表格。
      */
     fun loadFromSettings() {
+        val settings = ApiHelperSettings.getInstance()
+        loadFromTexts(
+            headersText = settings.state.globalHeadersText,
+            queriesText = settings.state.globalQueriesText,
+            cookiesText = settings.state.globalCookiesText,
+        )
+    }
+
+    /**
+     * 使用指定的三组原始配置文本填充表格。
+     */
+    fun loadFromTexts(headersText: String, queriesText: String, cookiesText: String) {
         updatingUi = true
         try {
-            val pairs = ApiHelperSettings.getInstance().parseGlobalHeaders()
-            headerTableModel.setPairs(pairs)
+            headerTableModel.setRows(ApiHelperSettings.parseParameterRows(headersText, charArrayOf(':', '=')))
+            queryTableModel.setRows(ApiHelperSettings.parseParameterRows(queriesText, charArrayOf('=', ':')))
+            cookieTableModel.setRows(ApiHelperSettings.parseParameterRows(cookiesText, charArrayOf('=', ':')))
+            updateTabCounts()
         } finally {
             updatingUi = false
+        }
+    }
+
+    /**
+     * 导出当前全局 Headers 文本（含 `[disabled]` 标记）。
+     */
+    fun exportGlobalHeadersText(): String =
+        ApiHelperSettings.formatParameterRows(headerTableModel.toAllRows(), separator = ": ")
+
+    /**
+     * 导出当前全局 Query 参数文本（含 `[disabled]` 标记）。
+     */
+    fun exportGlobalQueriesText(): String =
+        ApiHelperSettings.formatParameterRows(queryTableModel.toAllRows(), separator = "=")
+
+    /**
+     * 导出当前全局 Cookie 参数文本（含 `[disabled]` 标记）。
+     */
+    fun exportGlobalCookiesText(): String =
+        ApiHelperSettings.formatParameterRows(cookieTableModel.toAllRows(), separator = "=")
+
+    /**
+     * 将当前表格中的三组全局参数写回 [ApiHelperSettings]。
+     */
+    fun persistToSettings() {
+        val state = ApiHelperSettings.getInstance().state
+        state.globalHeadersText = exportGlobalHeadersText()
+        state.globalQueriesText = exportGlobalQueriesText()
+        state.globalCookiesText = exportGlobalCookiesText()
+    }
+
+    private fun updateTabCounts() {
+        tabPills[TAB_HEADERS]?.text = formatCountTitle(ApiHelperBundle.message("debug.tab.headers"), headerTableModel.toPairs().size)
+        tabPills[TAB_QUERY]?.text = formatCountTitle(ApiHelperBundle.message("debug.tab.query"), queryTableModel.toPairs().size)
+        tabPills[TAB_COOKIES]?.text = formatCountTitle(ApiHelperBundle.message("debug.tab.cookies"), cookieTableModel.toPairs().size)
+    }
+
+    private fun formatCountTitle(base: String, count: Int): String =
+        if (count > 0) "$base ($count)" else base
+
+    private class GlobalSubTabPill(
+        text: String,
+        onClick: () -> Unit,
+    ) : JLabel(text, CENTER) {
+
+        var selected: Boolean = false
+            set(value) {
+                field = value
+                font = ApiHelperUiStyle.labelFont(bold = value)
+                foreground = if (value) {
+                    ApiHelperUiStyle.activeTabPillForeground()
+                } else {
+                    UIUtil.getLabelForeground()
+                }
+                repaint()
+            }
+
+        private var hovered: Boolean = false
+
+        init {
+            isOpaque = false
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            border = BorderFactory.createEmptyBorder(JBUI.scale(4), JBUI.scale(10), JBUI.scale(4), JBUI.scale(10))
+            selected = false
+            addMouseListener(object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) = onClick()
+                override fun mouseEntered(e: MouseEvent) {
+                    hovered = true
+                    repaint()
+                }
+
+                override fun mouseExited(e: MouseEvent) {
+                    hovered = false
+                    repaint()
+                }
+            })
+        }
+
+        override fun paintComponent(g: Graphics) {
+            if (selected || hovered) {
+                val g2 = g.create() as Graphics2D
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                    val arc = JBUI.scale(6)
+                    if (selected) {
+                        g2.color = ApiHelperUiStyle.activeTabPillBackground()
+                        g2.fillRoundRect(0, 0, width - 1, height - 1, arc, arc)
+                        g2.color = ApiHelperUiStyle.activeTabPillBorder()
+                        g2.drawRoundRect(0, 0, width - 1, height - 1, arc, arc)
+                    } else {
+                        g2.color = ApiHelperUiStyle.hoverBackgroundColor()
+                        g2.fillRoundRect(0, 0, width - 1, height - 1, arc, arc)
+                    }
+                } finally {
+                    g2.dispose()
+                }
+            }
+            super.paintComponent(g)
+        }
+    }
+
+    private class HeaderIconButton(icon: Icon, tooltip: String) : JButton(icon) {
+        init {
+            toolTipText = tooltip
+            ApiHelperUiStyle.applyIconActionButton(this)
+        }
+
+        override fun paintComponent(g: Graphics) {
+            ApiHelperUiStyle.paintIconButtonHover(this, g)
+            super.paintComponent(g)
         }
     }
 
@@ -122,6 +319,7 @@ class GlobalParamsPanel : JPanel(BorderLayout()) {
         init {
             horizontalAlignment = CENTER
             verticalAlignment = CENTER
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             border = BorderFactory.createEmptyBorder()
         }
 
@@ -137,5 +335,11 @@ class GlobalParamsPanel : JPanel(BorderLayout()) {
             isOpaque = true
             return this
         }
+    }
+
+    companion object {
+        private const val TAB_HEADERS = "headers"
+        private const val TAB_QUERY = "query"
+        private const val TAB_COOKIES = "cookies"
     }
 }
