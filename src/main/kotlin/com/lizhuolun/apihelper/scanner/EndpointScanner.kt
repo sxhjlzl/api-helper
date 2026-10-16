@@ -210,8 +210,15 @@ object EndpointScanner {
                     return@recoverableScan
                 }
                 anySearched = true
-                val query = AnnotatedElementsSearch.searchPsiClasses(annotationClass, scope)
-                collected.addAll(query.findAll())
+                val directMatches = AnnotatedElementsSearch.searchPsiClasses(annotationClass, scope).findAll()
+                for (candidate in directMatches) {
+                    if (candidate.isAnnotationType) {
+                        val metaMatches = AnnotatedElementsSearch.searchPsiClasses(candidate, scope).findAll()
+                        collected.addAll(metaMatches)
+                    } else {
+                        collected.add(candidate)
+                    }
+                }
             }
         }
 

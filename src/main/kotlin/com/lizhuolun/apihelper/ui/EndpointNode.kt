@@ -19,6 +19,7 @@ class EndpointNode(
     val item: EndpointTreeItem? = null,
     val pointer: SmartPsiElementPointer<PsiMethod>? = null,
     val moduleName: String = "",
+    val isModuleGroup: Boolean = false,
 ) : DefaultMutableTreeNode() {
 
     override fun toString(): String = title
@@ -44,6 +45,16 @@ class EndpointNode(
          * @return 分组节点
          */
         fun group(className: String, moduleName: String = ""): EndpointNode =
-            EndpointNode(className, moduleName = moduleName)
+            EndpointNode(className, moduleName = moduleName, isModuleGroup = false)
+
+        /**
+         * 创建模块分组节点。
+         *
+         * @param moduleTitle 模块名称加数量
+         * @param moduleName 模块原始名称
+         * @return 模块分组节点
+         */
+        fun moduleGroup(moduleTitle: String, moduleName: String): EndpointNode =
+            EndpointNode(moduleTitle, moduleName = moduleName, isModuleGroup = true)
     }
 }

@@ -42,7 +42,59 @@ class ApiHelperSettings : PersistentStateComponent<ApiHelperSettings.SettingsSta
          * 调试请求的整体超时，单位秒；范围 1-600
          **/
         var requestTimeoutSeconds: Int = 60
+
+        /**
+         * 全局公共请求头，多行文本，每行格式为 Name: Value 或 Name=Value。
+         * 发送调试请求或生成 cURL 时自动合并，单接口同名 Header 优先级更高。
+         **/
+        var globalHeadersText: String = ""
+
+        /**
+         * 调试环境 Base URL 列表，多行文本，每行格式为 环境名=http://host:port 或直接写 http://host:port。
+         **/
+        var environmentsText: String = ""
+
+        /**
+         * 当前选中的调试环境名称，为空表示使用自动推断的本地端口地址。
+         **/
+        var selectedEnvironmentName: String = ""
     }
+
+    /**
+     * 解析全局公共 Header 列表。
+     *
+     * @return 解析后的 (Header名, Header值) 列表
+     */
+    fun parseGlobalHeaders(): List<Pair<String, String>> =
+        parseKeyValueLines(internalState.globalHeadersText, charArrayOf(':', '='))
+
+    /**
+     * 解析调试环境列表。
+     *
+     * @return 解析后的调试环境配置列表
+     */
+    fun parseEnvironments(): List<DebugEnvironment> =
+        internalState.environmentsText
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .mapNotNull { line ->
+                val eqIndex = line.indexOf('=')
+                if (eqIndex > 0) {
+                    val name = line.substring(0, eqIndex).trim()
+                    val baseUrl = line.substring(eqIndex + 1).trim().trimEnd('/')
+                    if (name.isNotEmpty() && baseUrl.isNotEmpty()) {
+                        DebugEnvironment(name, baseUrl)
+                    } else {
+                        null
+                    }
+                } else {
+                    val baseUrl = line.trimEnd('/')
+                    DebugEnvironment(baseUrl, baseUrl)
+                }
+            }
+            .distinctBy { it.name }
+            .toList()
 
     private var internalState: SettingsState = SettingsState()
 
@@ -55,5 +107,36 @@ class ApiHelperSettings : PersistentStateComponent<ApiHelperSettings.SettingsSta
     companion object {
         fun getInstance(): ApiHelperSettings =
             ApplicationManager.getApplication().getService(ApiHelperSettings::class.java)
+
+        /**
+         * 解析多行键值对配置文本，忽略空行与 # 注释行。
+         *
+         * @param raw 原始多行文本
+         * @param delimiters 允许的键值分隔符
+         * @return 键值对列表
+         */
+        internal fun parseKeyValueLines(raw: String, delimiters: CharArray): List<Pair<String, String>> =
+            raw.lineSequence()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !it.startsWith("#") }
+                .mapNotNull { line ->
+                    val idx = line.indexOfAny(delimiters)
+                    if (idx <= 0) return@mapNotNull null
+                    val key = line.substring(0, idx).trim()
+                    val value = line.substring(idx + 1).trim()
+                    if (key.isEmpty()) null else key to value
+                }
+                .toList()
     }
 }
+
+/**
+ * 调试环境配置项。
+ *
+ * @property name 环境展示名称，例如 Local / Dev / Test
+ * @property baseUrl 环境基础地址，例如 http://127.0.0.1:8080
+ */
+data class DebugEnvironment(
+    val name: String,
+    val baseUrl: String,
+)

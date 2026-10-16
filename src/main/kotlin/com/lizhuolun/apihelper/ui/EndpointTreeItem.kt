@@ -29,6 +29,7 @@ data class EndpointTreeItem(
     val moduleName: String,
     val kind: EndpointKind,
     val pointer: SmartPsiElementPointer<PsiMethod>?,
+    val hasCounterpart: Boolean = false,
 ) {
     companion object {
 
@@ -39,9 +40,14 @@ data class EndpointTreeItem(
          *
          * @param info 端点映射
          * @param method 已从智能指针解析出的有效方法
+         * @param hasCounterpart 是否存在匹配的对端接口
          * @return 展示项
          */
-        fun from(info: HttpMappingInfo, method: PsiMethod): EndpointTreeItem =
+        fun from(
+            info: HttpMappingInfo,
+            method: PsiMethod,
+            hasCounterpart: Boolean = false,
+        ): EndpointTreeItem =
             EndpointTreeItem(
                 url = info.url,
                 httpMethod = info.httpMethod,
@@ -50,6 +56,7 @@ data class EndpointTreeItem(
                 moduleName = ModuleUtilCore.findModuleForPsiElement(method)?.name.orEmpty(),
                 kind = info.kind,
                 pointer = info.methodPointer,
+                hasCounterpart = hasCounterpart,
             )
     }
 }

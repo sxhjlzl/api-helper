@@ -64,11 +64,15 @@ internal object EndpointParameterResolver {
             ?.takeIf { it.isNotBlank() }
             ?: fallback
         val required = annotation?.let { readAnnotationBoolean(it, "required") } ?: true
+        val defaultOrExample = annotation?.let { readAnnotationString(it, "defaultValue") }
+            ?.takeIf { it.isNotBlank() && it != SPRING_DEFAULT_NONE }
+            ?: annotationExampleValue(parameter)
+            ?: sampleValue(parameter.type)
         return EndpointParameterDescriptor(
             name,
             parameter.type.canonicalText,
             required,
-            sampleValue(parameter.type),
+            defaultOrExample,
             parameterDescription(parameter),
         )
     }
@@ -132,9 +136,42 @@ internal object EndpointParameterResolver {
             name = parameterName(parameter),
             type = parameter.type.canonicalText,
             required = true,
-            sampleValue = sampleValue(parameter.type),
+            sampleValue = annotationExampleValue(parameter) ?: sampleValue(parameter.type),
             description = parameterDescription(parameter),
         )
+
+    /**
+     * 为请求体参数生成带缩进的 JSON 草稿，支持多层嵌套 DTO、泛型与集合类型，并识别 @JsonProperty 与 @Schema/@ApiModelProperty example。
+     *
+     * @param parameters 请求体候选参数列表
+     * @return 格式化后的 JSON 字符串，无请求体字段时返回空串
+     */
+    fun buildJsonSampleForParameters(parameters: List<PsiParameter>): String {
+        val activeParams = parameters.filterNot(::isIgnoredFrameworkParameter)
+        if (activeParams.isEmpty()) return ""
+        if (activeParams.size == 1) {
+            val single = activeParams[0]
+            val elementType = collectionElementType(single.type) ?: (single.type as? PsiArrayType)?.componentType
+            if (elementType != null) {
+                val itemJson = renderJsonTypeValue(elementType, emptyMap(), mutableSetOf(), depth = 1, explicitExample = null)
+                return "[\n  $itemJson\n]"
+            }
+            if (isExpandableQueryType(single.type)) {
+                return renderJsonObject(single.type, emptyMap(), mutableSetOf(), depth = 0)
+            }
+        }
+        val entries = LinkedHashMap<String, String>()
+        for (parameter in activeParams) {
+            if (isExpandableQueryType(parameter.type)) {
+                collectObjectJsonEntries(parameter.type, emptyMap(), mutableSetOf(), depth = 0, entries)
+            } else {
+                val name = parameterName(parameter)
+                val example = annotationExampleValue(parameter)
+                entries.putIfAbsent(name, renderJsonTypeValue(parameter.type, emptyMap(), mutableSetOf(), depth = 0, explicitExample = example))
+            }
+        }
+        return formatJsonEntries(entries, depth = 0)
+    }
 
     /**
      * 解析返回参数。复杂返回对象会展开为字段，泛型集合字段会继续展开一层元素字段。
@@ -163,20 +200,22 @@ internal object EndpointParameterResolver {
             .asSequence()
             .filter(::isQueryableField)
             .flatMap { field ->
-                val displayName = if (prefix.isBlank()) field.name else "$prefix.${field.name}"
+                val serializedName = serializedFieldName(field)
+                val displayName = if (prefix.isBlank()) serializedName else "$prefix.$serializedName"
                 val actualFieldType = actualTypes[typeParameterName(field.type)] ?: field.type
                 val descriptor = EndpointParameterDescriptor(
                     name = displayName,
                     type = actualFieldType.canonicalText,
                     required = false,
-                    sampleValue = sampleValue(actualFieldType),
+                    sampleValue = annotationExampleValue(field) ?: sampleValue(actualFieldType),
                     description = fieldDescription(field, sourceCommentCache),
                 )
                 val nestedElementType = responseCollectionElementType(actualFieldType, actualTypes, firstActualType)
                     ?: responseCollectionElementType(field.type, actualTypes, firstActualType)
                 val nested = when {
-                    nestedElementType != null -> responseObjectFields(nestedElementType, "$displayName[]", sourceCommentCache)
-                    actualFieldType != field.type -> responseObjectFields(actualFieldType, displayName, sourceCommentCache)
+                    nestedElementType != null -> responseObjectFields(nestedElementType, "$displayName[]", sourceCommentCache, depth = 1)
+                    actualFieldType != field.type || isExpandableQueryType(actualFieldType) ->
+                        responseObjectFields(actualFieldType, displayName, sourceCommentCache, depth = 1)
                     else -> emptyList()
                 }
                 sequenceOf(descriptor) + nested.asSequence()
@@ -192,47 +231,77 @@ internal object EndpointParameterResolver {
         if (!isExpandableQueryType(parameter.type)) {
             return emptyList()
         }
-        val psiClass = PsiTypesUtil.getPsiClass(parameter.type) ?: return emptyList()
         val sourceCommentCache = mutableMapOf<String, Map<String, String>>()
-        return psiClass.allFields
-            .asSequence()
-            .filter(::isQueryableField)
-            .map {
-                EndpointParameterDescriptor(
-                    name = it.name,
-                    type = it.type.canonicalText,
-                    required = required,
-                    sampleValue = sampleValue(it.type),
-                    description = fieldDescription(it, sourceCommentCache),
-                )
-            }
+        return expandTypeFields(parameter.type, prefix = "", required = required, sourceCommentCache = sourceCommentCache, visited = mutableSetOf(), depth = 0)
             .distinctBy { it.name }
             .toList()
+    }
+
+    private fun expandTypeFields(
+        type: PsiType,
+        prefix: String,
+        required: Boolean,
+        sourceCommentCache: MutableMap<String, Map<String, String>>,
+        visited: MutableSet<String>,
+        depth: Int,
+    ): List<EndpointParameterDescriptor> {
+        if (depth > MAX_NESTED_DEPTH || !isExpandableQueryType(type)) {
+            return emptyList()
+        }
+        val classType = type as? PsiClassType ?: return emptyList()
+        val psiClass = classType.resolveGenerics().element ?: PsiTypesUtil.getPsiClass(type) ?: return emptyList()
+        val qName = psiClass.qualifiedName ?: psiClass.name ?: return emptyList()
+        if (!visited.add(qName)) return emptyList()
+        try {
+            val actualTypes = ownerTypeParameterMap(classType, psiClass)
+            val firstActualType = classType.parameters.firstOrNull()?.takeUnless(::isTypeParameter)
+                ?: ownerTypeArgumentFromText(classType, psiClass, 0)
+            return psiClass.allFields
+                .asSequence()
+                .filter(::isQueryableField)
+                .flatMap { field ->
+                    val fieldName = serializedFieldName(field)
+                    val displayName = if (prefix.isBlank()) fieldName else "$prefix.$fieldName"
+                    val actualFieldType = actualTypes[typeParameterName(field.type)] ?: field.type
+                    val descriptor = EndpointParameterDescriptor(
+                        name = displayName,
+                        type = actualFieldType.canonicalText,
+                        required = required,
+                        sampleValue = annotationExampleValue(field) ?: sampleValue(actualFieldType),
+                        description = fieldDescription(field, sourceCommentCache),
+                    )
+                    val nestedCollectionElem = responseCollectionElementType(actualFieldType, actualTypes, firstActualType)
+                        ?: responseCollectionElementType(field.type, actualTypes, firstActualType)
+                    val nested = when {
+                        depth >= MAX_NESTED_DEPTH -> emptyList()
+                        nestedCollectionElem != null && isExpandableQueryType(nestedCollectionElem) ->
+                            expandTypeFields(nestedCollectionElem, "$displayName[]", false, sourceCommentCache, visited, depth + 1)
+                        isExpandableQueryType(actualFieldType) ->
+                            expandTypeFields(actualFieldType, displayName, false, sourceCommentCache, visited, depth + 1)
+                        else -> emptyList()
+                    }
+                    sequenceOf(descriptor) + nested.asSequence()
+                }
+                .toList()
+        } finally {
+            visited.remove(qName)
+        }
     }
 
     private fun responseObjectFields(
         type: PsiType,
         prefix: String,
         sourceCommentCache: MutableMap<String, Map<String, String>>,
+        depth: Int = 1,
     ): List<EndpointParameterDescriptor> {
-        if (!isExpandableQueryType(type)) {
-            return emptyList()
-        }
-        val psiClass = PsiTypesUtil.getPsiClass(type) ?: return emptyList()
-        val sourceCommentCache = mutableMapOf<String, Map<String, String>>()
-        return psiClass.allFields
-            .asSequence()
-            .filter(::isQueryableField)
-            .map {
-                EndpointParameterDescriptor(
-                    name = "$prefix.${it.name}",
-                    type = it.type.canonicalText,
-                    required = false,
-                    sampleValue = sampleValue(it.type),
-                    description = fieldDescription(it, sourceCommentCache),
-                )
-            }
-            .toList()
+        return expandTypeFields(
+            type = type,
+            prefix = prefix,
+            required = false,
+            sourceCommentCache = sourceCommentCache,
+            visited = mutableSetOf(),
+            depth = depth,
+        )
     }
 
     private fun responseCollectionElementType(
@@ -294,8 +363,11 @@ internal object EndpointParameterResolver {
     private fun collectionElementType(type: PsiType): PsiType? {
         val classType = type as? PsiClassType ?: return null
         val qualifiedName = classType.resolve()?.qualifiedName
+        val rawCanonical = type.canonicalText.substringBefore('<')
+        val rawPresentable = type.presentableText.substringBefore('<')
         val isCollectionType = qualifiedName in COLLECTION_TYPES ||
-                COLLECTION_TYPES.any { type.canonicalText.startsWith("$it<") }
+                rawCanonical in COLLECTION_TYPES ||
+                rawPresentable in COLLECTION_SHORT_NAMES
         if (!isCollectionType) {
             return null
         }
@@ -609,8 +681,171 @@ internal object EndpointParameterResolver {
         return (value as? PsiLiteralExpression)?.value as? Boolean
     }
 
+    /**
+     * 提取字段的 JSON 序列化名称，优先读取 @JsonProperty 的 value。
+     */
+    private fun serializedFieldName(field: PsiField): String {
+        val modifierList = field.modifierList ?: return field.name
+        for (fqn in JSON_NAME_ANNOTATIONS) {
+            val annotation = modifierList.findAnnotation(fqn) ?: continue
+            val customName = (readAnnotationString(annotation, "value") ?: readAnnotationString(annotation, "name"))
+                ?.takeIf { it.isNotBlank() }
+            if (customName != null) return customName
+        }
+        return field.name
+    }
+
+    /**
+     * 提取字段或参数上 Swagger / OpenAPI 注解声明的 example 值。
+     */
+    private fun annotationExampleValue(owner: PsiElement): String? {
+        val modifierList = when (owner) {
+            is PsiField -> owner.modifierList
+            is PsiParameter -> owner.modifierList
+            else -> null
+        } ?: return null
+        return modifierList.annotations
+            .asSequence()
+            .mapNotNull { annotation ->
+                val attrs = EXAMPLE_ANNOTATION_ATTRIBUTES[annotation.qualifiedName].orEmpty()
+                attrs.firstNotNullOfOrNull { attr ->
+                    readAnnotationString(annotation, attr)?.takeIf { it.isNotBlank() }
+                }
+            }
+            .firstOrNull()
+    }
+
+    private fun renderJsonObject(
+        type: PsiType,
+        parentTypeMap: Map<String, PsiType>,
+        visited: MutableSet<String>,
+        depth: Int,
+    ): String {
+        val entries = LinkedHashMap<String, String>()
+        collectObjectJsonEntries(type, parentTypeMap, visited, depth, entries)
+        return formatJsonEntries(entries, depth)
+    }
+
+    private fun collectObjectJsonEntries(
+        type: PsiType,
+        parentTypeMap: Map<String, PsiType>,
+        visited: MutableSet<String>,
+        depth: Int,
+        out: MutableMap<String, String>,
+    ) {
+        if (depth > MAX_NESTED_DEPTH || !isExpandableQueryType(type)) return
+        val classType = type as? PsiClassType ?: return
+        val psiClass = classType.resolveGenerics().element ?: PsiTypesUtil.getPsiClass(type) ?: return
+        val qName = psiClass.qualifiedName ?: psiClass.name ?: return
+        if (!visited.add(qName)) return
+        try {
+            val actualTypes = parentTypeMap + ownerTypeParameterMap(classType, psiClass)
+            val firstActualType = classType.parameters.firstOrNull()?.takeUnless(::isTypeParameter)
+                ?: ownerTypeArgumentFromText(classType, psiClass, 0)
+            for (field in psiClass.allFields) {
+                if (!isQueryableField(field)) continue
+                val key = serializedFieldName(field)
+                if (key in out) continue
+                val actualFieldType = actualTypes[typeParameterName(field.type)] ?: field.type
+                val example = annotationExampleValue(field)
+                val nestedCollectionElem = responseCollectionElementType(actualFieldType, actualTypes, firstActualType)
+                    ?: responseCollectionElementType(field.type, actualTypes, firstActualType)
+                val valueJson = when {
+                    nestedCollectionElem != null -> {
+                        if (depth < MAX_NESTED_DEPTH) {
+                            val elemJson = renderJsonTypeValue(nestedCollectionElem, actualTypes, visited, depth + 1, explicitExample = null)
+                            "[$elemJson]"
+                        } else {
+                            "[]"
+                        }
+                    }
+                    else -> renderJsonTypeValue(actualFieldType, actualTypes, visited, depth + 1, explicitExample = example)
+                }
+                out[key] = valueJson
+            }
+        } finally {
+            visited.remove(qName)
+        }
+    }
+
+    private fun renderJsonTypeValue(
+        type: PsiType,
+        actualTypes: Map<String, PsiType>,
+        visited: MutableSet<String>,
+        depth: Int,
+        explicitExample: String?,
+    ): String {
+        if (!explicitExample.isNullOrBlank()) {
+            return formatJsonScalar(type, explicitExample)
+        }
+        val arrayComponent = (type as? PsiArrayType)?.componentType ?: collectionElementType(type)
+        if (arrayComponent != null) {
+            if (depth > MAX_NESTED_DEPTH) return "[]"
+            val resolvedElem = actualTypes[typeParameterName(arrayComponent)] ?: arrayComponent
+            val itemJson = renderJsonTypeValue(resolvedElem, actualTypes, visited, depth + 1, explicitExample = null)
+            return "[$itemJson]"
+        }
+        val psiClass = PsiTypesUtil.getPsiClass(type)
+        if (psiClass?.isEnum == true) {
+            val firstConstant = psiClass.fields.firstOrNull { it.javaClass.simpleName.contains("EnumConstant") }?.name
+            return "\"${escapeJsonString(firstConstant.orEmpty())}\""
+        }
+        if (depth <= MAX_NESTED_DEPTH && isExpandableQueryType(type)) {
+            return renderJsonObject(type, actualTypes, visited, depth)
+        }
+        return formatJsonScalar(type, sampleValue(type))
+    }
+
+    private fun formatJsonEntries(entries: Map<String, String>, depth: Int): String {
+        if (entries.isEmpty()) return "{}"
+        val indent = "  ".repeat(depth)
+        val childIndent = "  ".repeat(depth + 1)
+        return entries.entries.joinToString(
+            separator = ",\n",
+            prefix = "{\n",
+            postfix = "\n$indent}",
+        ) { (key, value) ->
+            "$childIndent\"${escapeJsonString(key)}\": $value"
+        }
+    }
+
+    private fun formatJsonScalar(type: PsiType, rawValue: String): String {
+        val sample = sampleValue(type)
+        if (sample == "true" || sample == "false") {
+            return if (rawValue.equals("false", ignoreCase = true)) "false" else "true"
+        }
+        if (sample == "0") {
+            return if (rawValue.toBigDecimalOrNull() != null) rawValue else "0"
+        }
+        return "\"${escapeJsonString(rawValue)}\""
+    }
+
+    private fun escapeJsonString(value: String): String =
+        value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
+            .replace("\t", "\\t")
+
+    private const val MAX_NESTED_DEPTH = 2
     private const val DEFAULT_PARAMETER_NAME = "param"
     private const val SERIAL_VERSION_UID = "serialVersionUID"
+    private const val SPRING_DEFAULT_NONE = "\n\t\t\n\t\t\n\ue000\ue001\ue002\n\t\t\t\t\n"
+
+    private val JSON_NAME_ANNOTATIONS = listOf(
+        "com.fasterxml.jackson.annotation.JsonProperty",
+        "com.google.gson.annotations.SerializedName",
+        "com.alibaba.fastjson.annotation.JSONField",
+        "com.alibaba.fastjson2.annotation.JSONField",
+    )
+
+    private val EXAMPLE_ANNOTATION_ATTRIBUTES = mapOf(
+        "io.swagger.v3.oas.annotations.Parameter" to listOf("example"),
+        "io.swagger.v3.oas.annotations.media.Schema" to listOf("example", "defaultValue"),
+        "io.swagger.annotations.ApiModelProperty" to listOf("example"),
+        "io.swagger.annotations.ApiParam" to listOf("example", "defaultValue"),
+    )
     private val FIELD_COMMENT_REGEX = Regex(
         """(?s)(/\*\*.*?\*/|/\*.*?\*/|(?://[^\n]*\n\s*)+)\s*(?:@\w[\w.]*\s*(?:\([^)]*\))?\s*)*(?:private|protected|public)?\s*(?:final\s+)?[\w.<>, ?\[\]]+\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:[=;])""",
     )
@@ -666,6 +901,13 @@ internal object EndpointParameterResolver {
         "kotlin.collections.Collection",
         "kotlin.collections.List",
         "kotlin.collections.Set",
+    )
+
+    private val COLLECTION_SHORT_NAMES = setOf(
+        "Iterable",
+        "Collection",
+        "List",
+        "Set",
     )
 }
 
