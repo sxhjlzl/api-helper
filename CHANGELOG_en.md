@@ -2,6 +2,26 @@
 
 All notable changes to the ApiHelper plugin are documented in this file. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-10-27
+
+### Added
+
+- **API Contract Check (Contract Guard)**: a sixth top-level tool window tab **`Contract`** that walks every Feign / HttpExchange to Controller pairing in the project, groups protocol mismatches by severity, jumps to source on double-click, and exports a Markdown report.
+- **On-the-fly editor inspection**: contract issues are highlighted directly on Controller and Feign methods, suppressible with `//noinspection ApiHelperContract`, for both Java and Kotlin.
+- **Quick fix**: when parameter names differ, a single Alt+Enter rewrites the Feign annotation value to the name the server expects (annotation only, never the method signature).
+- **Reverse caller lookup**: right-click a Controller method and choose **`Show Callers`** to list every Feign / HttpExchange client calling it, with module, path, and HTTP method, and jump to any of them. Native Find Usages cannot see HTTP-level call relationships.
+- **P0 rule set**:
+  - client endpoints with no matching Controller in the project (orphans);
+  - mismatched explicit `@RequestParam` names between the two sides, the most common cause of production 400s;
+  - path variables declared in the URL template with no matching `@PathVariable` parameter;
+  - two Controllers mapped to the same path and HTTP method, which fails application startup.
+
+### Improved
+
+- Endpoint mappings now also carry a path template that preserves original variable names, sitting alongside the normalized matching path without affecting existing navigation.
+- The bilateral cache exposes a version counter and a read-only snapshot API so reports can detect staleness instead of showing outdated conclusions.
+- The contract scan runs in the background and is cancellable; editor highlighting only performs O(1) counterpart lookups and never triggers a full project scan.
+
 ## [1.1.1] - 2026-10-16
 
 ### Improved
@@ -115,6 +135,7 @@ All notable changes to the ApiHelper plugin are documented in this file. Version
 - Java and Kotlin source support
 - English and Simplified Chinese UI
 
+[1.2.0]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.2.0
 [1.1.1]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.1.1
 [1.1.0]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.1.0
 [1.0.4]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.4

@@ -4,6 +4,7 @@ import com.intellij.psi.PsiMethod
 import com.intellij.psi.SmartPointerManager
 import com.intellij.psi.SmartPsiElementPointer
 import com.lizhuolun.apihelper.core.annotation.PathBuilder
+import com.lizhuolun.apihelper.core.contract.PathTemplate
 
 /**
  * HTTP 映射元数据，对应一个 Feign / Controller / HttpExchange 方法。
@@ -16,6 +17,8 @@ import com.lizhuolun.apihelper.core.annotation.PathBuilder
  *               Controller 侧含 context-path，仅用于展示与复制，不参与两端匹配
  * @property matchUrl 两端匹配专用的归一化相对路径：不含 context-path，
  *                    且路径变量统一归一化为 {}，构造时一次性计算，见 [PathBuilder.normalizeForMatch]
+ * @property pathTemplate 保留原始路径变量名的模板，供契约体检判断「URL 声明了变量但方法没有对应参数」；
+ *                        与 matchUrl 并列存在，互不影响配对逻辑
  * @property httpMethod HTTP 方法
  * @property methodPointer 关联方法的智能指针；解析指针时调用方必须自行持有 read action
  * @property kind 来源类型，决定后续匹配的对端
@@ -26,6 +29,7 @@ import com.lizhuolun.apihelper.core.annotation.PathBuilder
 data class HttpMappingInfo(
     val url: String,
     val matchUrl: String,
+    val pathTemplate: PathTemplate = PathTemplate.parse(matchUrl),
     val httpMethod: HttpMethod,
     val methodPointer: SmartPsiElementPointer<PsiMethod>,
     val kind: EndpointKind,
@@ -84,6 +88,8 @@ data class HttpMappingInfo(
          * @param httpMethod HTTP 方法
          * @param method 关联方法
          * @param kind 端点类别
+         * @param pathTemplate 保留原始变量名的路径模板；默认从 matchUrl 推导（此时变量名已丢失），
+         *                     需要变量名的调用方应显式传入原始相对路径解析出的模板
          * @return 使用智能指针持有方法引用的 HttpMappingInfo
          */
         fun create(
@@ -92,9 +98,11 @@ data class HttpMappingInfo(
             method: PsiMethod,
             kind: EndpointKind,
             matchUrl: String = PathBuilder.normalizeForMatch(url),
+            pathTemplate: PathTemplate = PathTemplate.parse(matchUrl),
         ): HttpMappingInfo = HttpMappingInfo(
             url = url,
             matchUrl = matchUrl,
+            pathTemplate = pathTemplate,
             httpMethod = httpMethod,
             methodPointer = SmartPointerManager.getInstance(method.project)
                 .createSmartPsiElementPointer(method),

@@ -16,6 +16,8 @@
         <h3>Features</h3>
         <ul>
             <li><b>Bidirectional gutter navigation</b> between <code>@FeignClient</code> / <code>@HttpExchange</code> interfaces and <code>@RestController</code> methods.</li>
+            <li><b>API contract check</b> — detects parameter-name mismatches, missing path variables, orphan endpoints, and duplicate mappings between the two sides, with editor highlighting, a report tab, and a one-click fix.</li>
+            <li><b>Reverse caller lookup</b> — lists every Feign client calling a Controller method, something native Find Usages cannot see.</li>
             <li><b>Controller gutter actions</b> — right-click Controller gutter arrows to debug the endpoint or copy the resolved URL.</li>
             <li><b>Endpoint explorer</b> — browse Controller and Feign / HttpExchange endpoints from the ApiHelper tool window.</li>
             <li><b>Markdown API docs</b> — copy endpoint documentation with request parameters, request body fields, response fields, and descriptions from Javadocs or Swagger annotations.</li>
@@ -43,6 +45,14 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.2.0</h3>
+        <ul>
+            <li>New <b>Contract</b> tool window tab that reports protocol mismatches between Feign / HttpExchange and Controller endpoints, grouped by severity, with Markdown export.</li>
+            <li>Editor inspection highlighting contract issues on both sides for Java and Kotlin, suppressible via <code>//noinspection ApiHelperContract</code>.</li>
+            <li>Quick fix that synchronizes a Feign parameter name with the name the Controller expects.</li>
+            <li><b>Show Callers</b> action on Controller methods, listing every Feign client that calls the endpoint.</li>
+            <li>P0 rules: orphan endpoints, explicit <code>@RequestParam</code> name mismatches, missing <code>@PathVariable</code> parameters, and duplicate path + HTTP method mappings.</li>
+        </ul>
         <h3>1.1.1</h3>
         <ul>
             <li>Promoted <b>Debug</b> to a top-level native tool window tab alongside <b>Interfaces</b>, <b>Base URL</b>, <b>History</b>, and <b>Global Params</b>.</li>
@@ -165,6 +175,28 @@
         <postStartupActivity
                 implementation="com.lizhuolun.apihelper.listener.ApiHelperStartupActivity"/>
 
+        <!-- 契约一致性检查：Java 与 Kotlin 分别注册一次 -->
+        <localInspection
+                language="JAVA"
+                shortName="ApiHelperContract"
+                bundle="messages.ApiHelperBundle"
+                key="inspection.contract.display.name"
+                groupBundle="messages.ApiHelperBundle"
+                groupKey="inspection.contract.group"
+                enabledByDefault="true"
+                level="WARNING"
+                implementationClass="com.lizhuolun.apihelper.inspection.ContractInspection"/>
+        <localInspection
+                language="kotlin"
+                shortName="ApiHelperContract"
+                bundle="messages.ApiHelperBundle"
+                key="inspection.contract.display.name"
+                groupBundle="messages.ApiHelperBundle"
+                groupKey="inspection.contract.group"
+                enabledByDefault="true"
+                level="WARNING"
+                implementationClass="com.lizhuolun.apihelper.inspection.ContractInspection"/>
+
         <!-- PSI 变更监听器 -->
         <psi.treeChangeListener
                 implementation="com.lizhuolun.apihelper.listener.ApiHelperPsiListener"/>
@@ -186,6 +218,13 @@
             <keyboard-shortcut keymap="$default" first-keystroke="control alt BACK_SLASH"/>
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt BACK_SLASH"/>
             <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta alt BACK_SLASH"/>
+        </action>
+
+        <!-- 反向调用方：列出调用该 Controller 方法的所有 Feign / HttpExchange 客户端 -->
+        <action id="ApiHelper.ShowEndpointCallers"
+                class="com.lizhuolun.apihelper.ui.callers.ShowEndpointCallersAction"
+                icon="AllIcons.Actions.Find">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
     </actions>
 </idea-plugin>

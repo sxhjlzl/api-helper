@@ -29,6 +29,7 @@ import com.lizhuolun.apihelper.core.HttpMappingInfo
 import com.lizhuolun.apihelper.core.HttpMethod
 import com.lizhuolun.apihelper.core.annotation.SpringAnnotations
 import com.lizhuolun.apihelper.settings.ApiHelperSettings
+import com.lizhuolun.apihelper.ui.callers.ShowEndpointCallersAction
 import com.lizhuolun.apihelper.ui.debug.CurlCommandBuilder
 import java.awt.BorderLayout
 import java.awt.datatransfer.StringSelection
@@ -338,6 +339,10 @@ class EndpointTree(
                 ApiHelperBundle.message("toolwindow.action.debug.endpoint"),
                 AllIcons.Actions.Execute,
             ) { debugSelectedEndpoint() })
+            group.add(popupAction(
+                ApiHelperBundle.message("callers.action.show"),
+                AllIcons.Actions.Find,
+            ) { showCallersForSelected() })
             group.addSeparator()
         }
         group.add(popupAction(
@@ -376,6 +381,18 @@ class EndpointTree(
                 action()
             }
         }
+
+    private fun showCallersForSelected() {
+        val item = (tree.lastSelectedPathComponent as? EndpointNode)?.item ?: return
+        val method = ApplicationManager.getApplication().runReadAction(Computable {
+            item.pointer?.element?.takeIf { it.isValid }
+        }) ?: return
+        ApplicationManager.getApplication().invokeLater {
+            if (!project.isDisposed) {
+                ShowEndpointCallersAction.showCallers(project, method)
+            }
+        }
+    }
 
     private fun debugSelectedEndpoint() {
         val node = tree.lastSelectedPathComponent as? EndpointNode ?: return
