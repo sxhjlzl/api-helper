@@ -11,6 +11,7 @@ import com.intellij.util.messages.MessageBus
 import com.lizhuolun.apihelper.core.EndpointKind
 import com.lizhuolun.apihelper.core.HttpMappingInfo
 import com.lizhuolun.apihelper.core.annotation.AnnotationParser
+import com.lizhuolun.apihelper.core.contract.BilateralSnapshot
 import com.lizhuolun.apihelper.scanner.EndpointScanner
 import com.lizhuolun.apihelper.settings.ApiHelperSettings
 import kotlinx.coroutines.CoroutineScope
@@ -115,6 +116,18 @@ class BilateralMappingCacheService(
      **/
     private val mutationLock = Any()
 
+    /**
+     * 缓存版本号，任何写入（全量替换 / 增量覆盖 / 删除 / 清空）都会自增。
+     * 契约体检报告据此判断结果是否已过期。
+     **/
+    private val version = AtomicLong()
+
+    /**
+     * 最近一次构造的双边快照，版本号一致时直接复用，避免重复拷贝大列表。
+     **/
+    @Volatile
+    private var cachedSnapshot: BilateralSnapshot? = null
+
     private val controllerRefreshLock = Any()
     private var controllerRefreshJob: Job? = null
     private val controllerRefreshGeneration = AtomicLong()
@@ -126,6 +139,7 @@ class BilateralMappingCacheService(
      */
     fun replaceClient(mappings: Collection<HttpMappingInfo>) {
         clientSide = SideSnapshot(mappings.associateBy { it.qualifier })
+        version.incrementAndGet()
     }
 
     /**
@@ -135,6 +149,7 @@ class BilateralMappingCacheService(
      */
     fun replaceController(mappings: Collection<HttpMappingInfo>) {
         controllerSide = SideSnapshot(mappings.associateBy { it.qualifier })
+        version.incrementAndGet()
     }
 
     /**
@@ -150,6 +165,7 @@ class BilateralMappingCacheService(
                 clientSide = clientSide.plus(info)
             }
         }
+        version.incrementAndGet()
     }
 
     /**
@@ -165,6 +181,7 @@ class BilateralMappingCacheService(
             clientSide = clientSide.removeByQualifier(key)
             controllerSide = controllerSide.removeByQualifier(key)
         }
+        version.incrementAndGet()
     }
 
     /**
@@ -178,6 +195,7 @@ class BilateralMappingCacheService(
             clientSide = clientSide.removeByQualifierPrefix(prefix)
             controllerSide = controllerSide.removeByQualifierPrefix(prefix)
         }
+        version.incrementAndGet()
     }
 
     /**
@@ -359,11 +377,37 @@ class BilateralMappingCacheService(
     }
 
     /**
+     * 获取一次性的双边只读快照，供契约体检在同一次遍历中使用。
+     *
+     * 快照只做值拷贝，不访问 PSI，因此可以在任意线程调用；
+     * 版本号变化时会重新构造，版本未变时直接复用上次结果。
+     *
+     * @return 包含两侧映射与倒排索引的快照
+     */
+    fun snapshot(): BilateralSnapshot {
+        val currentVersion = version.get()
+        cachedSnapshot?.takeIf { it.version == currentVersion }?.let { return it }
+
+        val clients = clientSide
+        val controllers = controllerSide
+        val snapshot = BilateralSnapshot(
+            clients = clients.byQualifier.values.toList(),
+            controllers = controllers.byQualifier.values.toList(),
+            clientsByMatchUrl = clients.byMatchUrl,
+            controllersByMatchUrl = controllers.byMatchUrl,
+            version = currentVersion,
+        )
+        cachedSnapshot = snapshot
+        return snapshot
+    }
+
+    /**
      * 清空缓存，通常仅在测试或异常恢复路径调用。
      */
     fun clear() {
         clientSide = SideSnapshot.EMPTY
         controllerSide = SideSnapshot.EMPTY
+        version.incrementAndGet()
     }
 
     /**

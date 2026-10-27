@@ -2,6 +2,26 @@
 
 本文件记录 ApiHelper 插件的版本变更。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.2.0] - 2026-10-27
+
+### 新增
+
+- **接口契约体检（Contract Guard）**：工具窗口新增第 6 个一级标签页 **`体检`**，遍历全工程 Feign / HttpExchange 与 Controller 的配对关系，按严重级分组列出协议不一致问题，双击直达源码，并支持一键复制 Markdown 报告。
+- **编辑器实时契约检查**：Controller 与 Feign 方法上直接以波浪线提示契约问题，支持 `//noinspection ApiHelperContract` 局部抑制；Java 与 Kotlin 双语言生效。
+- **一键修复**：参数名不一致时提供 QuickFix，直接把 Feign 侧注解里的参数名同步为服务端期望的名字（仅改写注解属性，不动方法签名）。
+- **反向调用方查询**：Controller 方法右键 **`查看调用方`**，列出所有调用该接口的 Feign / HttpExchange 客户端（含模块、路径、HTTP 方法），双击跳转——IDE 原生 `Find Usages` 无法覆盖 HTTP 端点之间的调用关系。
+- **P0 规则集**：
+  - 客户端接口在工程内无任何 Controller 对端（孤儿接口）；
+  - 两端 `@RequestParam` 显式名不一致（线上 400 的头号成因）；
+  - URL 模板声明了路径变量但方法参数缺少对应 `@PathVariable`；
+  - 两个 Controller 映射到相同路径与 HTTP 方法（Spring 启动即失败）。
+
+### 优化
+
+- 端点映射新增保留原始变量名的路径模板，与用于配对的归一化路径并列存在，互不影响既有跳转逻辑。
+- 双边缓存新增版本号与只读快照 API，体检结果可判断是否过期，避免缓存变更后展示陈旧结论。
+- 契约体检全程在后台线程执行并支持取消，编辑器高亮仅做 O(1) 对端查询，不触发全工程扫描。
+
 ## [1.1.1] - 2026-10-16
 
 ### 优化
@@ -115,6 +135,7 @@
 - 支持 Java 与 Kotlin 源码
 - 支持中英双语界面
 
+[1.2.0]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.2.0
 [1.1.1]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.1.1
 [1.1.0]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.1.0
 [1.0.4]: https://github.com/sxhjlzl/api-helper/releases/tag/v1.0.4

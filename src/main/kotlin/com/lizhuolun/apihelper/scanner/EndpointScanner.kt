@@ -17,6 +17,7 @@ import com.lizhuolun.apihelper.core.HttpMappingInfo
 import com.lizhuolun.apihelper.core.annotation.AnnotationParser
 import com.lizhuolun.apihelper.core.annotation.PathBuilder
 import com.lizhuolun.apihelper.core.annotation.SpringAnnotations
+import com.lizhuolun.apihelper.core.contract.PathTemplate
 
 /**
  * 端点扫描器：在工程中查找所有 FeignClient / HttpExchange / RestController，
@@ -110,12 +111,14 @@ object EndpointScanner {
             val annotation = AnnotationParser.findRestfulAnnotation(method) ?: continue
             val methodPath = AnnotationParser.extractMethodPath(annotation)
             val httpMethod = AnnotationParser.extractHttpMethod(annotation)
+            val relativeUrl = PathBuilder.buildClientUrl(classPath, methodPath)
             mappings += HttpMappingInfo.create(
-                url = PathBuilder.buildClientUrl(classPath, methodPath),
+                url = relativeUrl,
                 httpMethod = httpMethod,
                 method = method,
                 kind = kind,
-                matchUrl = PathBuilder.normalizeForMatch(PathBuilder.buildClientUrl(classPath, methodPath)),
+                matchUrl = PathBuilder.normalizeForMatch(relativeUrl),
+                pathTemplate = PathTemplate.parse(relativeUrl),
             )
         }
         mappings
@@ -155,14 +158,15 @@ object EndpointScanner {
             val annotation = AnnotationParser.findRestfulAnnotation(method) ?: continue
             val methodPath = AnnotationParser.extractMethodPath(annotation)
             val httpMethod = AnnotationParser.extractHttpMethod(annotation)
+            // 匹配与契约模板都使用不含 context-path 的相对路径，保证与客户端侧可比
+            val relativeUrl = PathBuilder.buildClientUrl(classPath, methodPath)
             mappings += HttpMappingInfo.create(
                 url = PathBuilder.buildControllerUrl(contextPath, mvcPath, classPath, methodPath),
                 httpMethod = httpMethod,
                 method = method,
                 kind = EndpointKind.CONTROLLER,
-                // 匹配路径不含 context-path 与 mvc servlet path，保证与客户端侧可匹配；
-                // 变量名在客户端/服务端命名不一致时也通过归一化容忍。
-                matchUrl = PathBuilder.normalizeForMatch(PathBuilder.buildClientUrl(classPath, methodPath)),
+                matchUrl = PathBuilder.normalizeForMatch(relativeUrl),
+                pathTemplate = PathTemplate.parse(relativeUrl),
             )
         }
         mappings

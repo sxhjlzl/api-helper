@@ -1,5 +1,9 @@
 # Gradle
 .gradle/
+# 本地构建辅助目录（JDK 21 + 只读依赖缓存重定向）
+.gradle-user/
+.ro-dep-cache/
+.dsh/
 build/
 !**/src/main/**/build/
 !**/src/test/**/build/
