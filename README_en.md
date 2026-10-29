@@ -30,14 +30,14 @@
 
 | Module | Highlights |
 | :--- | :--- |
-| **Bidirectional Gutter Navigation** | One-click jump between `@RestController` and `@FeignClient` / `@HttpExchange` methods; tolerates differing path variable names (`{id}` vs `{orderId}`) and recognizes custom composite meta-annotations (e.g. `@ApiV1RestController`). |
-| **Global Endpoint Search** | Press `Ctrl + Alt + \` (`Cmd + Opt + \` on macOS) anywhere to search across HTTP methods, URLs, methods, classes, and modules: `Enter` jumps to source, `Shift + Enter` jumps to counterpart, `Ctrl/Cmd + Enter` opens the debugger. |
-| **6-Tab Native Workspace** | Native top-level tabs for **Interfaces**, **Contract**, **Debug**, **Base URL**, **History**, and **Global Params**. **Interfaces** supports module grouping and orphan endpoint filtering; **Debug** features a vertical Request/Response split with line-numbered code areas. |
-| **API Contract Check** | Compares parameter names, path variables, required flags, and duplicate mappings between Feign / HttpExchange and Controllers, surfacing production-only 400s, 404s, and startup failures right in the editor. Includes a one-click parameter-name fix and Markdown report export. |
-| **Reverse Caller Lookup** | Right-click any Controller method and choose **Show Callers** to list every Feign client that calls it, with module, path, and HTTP method. Native Find Usages cannot see HTTP-level call relationships. |
-| **Smart API Debugger** | Auto-prefills Path / Query / Header / Cookie parameters and **recursively expands nested DTOs & `List<T>` into JSON drafts** (honoring `@JsonProperty` and `@Schema(example)`); includes environment switching, draft persistence, 30-request history replay, and streaming file uploads. |
-| **cURL & Markdown Docs** | One-click export of ready-to-run **cURL commands** (with active Base URL and global headers) and standard **Markdown API docs** (extracting Javadocs, `@param`, and Swagger annotations, and expanding generic wrappers like `DllResult<T>` and `DllPageResult<T>`). |
-| **Spring Config Aware** | Automatically resolves `application.yml`, `bootstrap.yml`, and `application-{profile}.yml` for `server.port`, `context-path`, `servlet.path`, and `${var:default}` placeholders; supports both **Java & Kotlin** via UAST. |
+| **Bidirectional Gutter Navigation** | One-click jump between `@RestController` and `@FeignClient` / `@HttpExchange` methods, tolerating differing path variable names and composite meta-annotations. |
+| **Global Endpoint Search** | Press `Ctrl + Alt + \` (`Cmd + Opt + \` on macOS) for multi-keyword search: `Enter` jumps to source, `Shift + Enter` to counterpart, `Ctrl/Cmd + Enter` opens the debugger. |
+| **6-Tab Native Workspace** | Native top-level tabs for **Interfaces**, **Contract**, **Debug**, **Base URL**, **History**, and **Global Params**, each with full window height. |
+| **API Contract Check** | Compares parameter names, path variables, and duplicate mappings between the two sides, surfacing production-only 400s / 404s right in the editor, with one-click fix and Markdown report export. |
+| **Reverse Caller Lookup** | Right-click a Controller method → **Show Callers** to list every Feign client calling it — something native Find Usages cannot see. |
+| **Smart API Debugger** | Auto-prefilled parameters with recursive nested-DTO JSON drafts, multi-environment switching, draft persistence, and 30-request history replay. |
+| **cURL & Markdown Docs** | One-click export of ready-to-run cURL commands and Markdown API docs with field descriptions. |
+| **Spring Config Aware** | Resolves `application*.yml` for port, `context-path`, and `${var:default}` placeholders; supports both Java & Kotlin via UAST. |
 
 ---
 
@@ -53,11 +53,11 @@
 | Workflow | Trigger | What It Does |
 | :--- | :--- | :--- |
 | **Search Any Endpoint** | `Ctrl + Alt + \` / `Cmd + Opt + \` | Multi-keyword search (e.g. `POST order`) to jump to source, counterpart, or debugger |
-| **Client ↔ Server Jump** | Click editor gutter icon | Left-click to jump to counterpart; right-click Controller gutter to debug or copy |
-| **Export cURL / API Docs** | Controller gutter / Tree context menu | Copies a standard `curl` command or Markdown documentation table to clipboard |
-| **Find Orphan Endpoints** | Toolbar `Filter by Pairing Status` | Filters `Unpaired (Orphan) Only` to spot Feign methods without a matching Controller |
-| **Switch Env & Global Token** | `Base URL` / `Global Params` tabs | Manage environment Base URLs and common headers (`Authorization`) in visual tables |
-| **Replay Debug History** | `History` tab / Debugger `History` button | Double-click any recent request to restore its parameters and response in the debugger |
+| **Client ↔ Server Jump** | Click editor gutter icon | Left-click to jump; right-click Controller gutter to debug or copy |
+| **Export cURL / API Docs** | Controller gutter / Tree context menu | Copies a ready-to-run `curl` command or Markdown API docs |
+| **Find Orphan Endpoints** | Toolbar `Filter by Pairing Status` | Filters to `Unpaired (Orphan) Only` in one click |
+| **Switch Env & Global Token** | `Base URL` / `Global Params` tabs | Manage environment URLs and common headers in visual tables |
+| **Replay Debug History** | `History` tab / Debugger `History` button | Double-click to restore the request and response |
 
 ---
 
@@ -116,6 +116,6 @@ src/main/kotlin/com/lizhuolun/apihelper/
 
 ## Feedback & Support
 
-- Current Version: **`1.2.0`** (see [CHANGELOG_en.md](./CHANGELOG_en.md) for full release notes)
+- Current Version: **`1.2.1`** (see [CHANGELOG_en.md](./CHANGELOG_en.md) for full release notes)
 - Found a bug or have a feature request? Feel free to open an issue on [GitHub Issues](https://github.com/sxhjlzl/api-helper/issues).
 - If **ApiHelper** saves you time, a **Star** on GitHub is greatly appreciated!
