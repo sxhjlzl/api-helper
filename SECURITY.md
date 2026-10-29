@@ -8,8 +8,8 @@ Only the latest minor release receives security fixes.
 
 | Version | Supported |
 | --- | --- |
-| 1.0.x   | ✅ |
-| < 1.0   | ❌ |
+| 1.2.x   | ✅ |
+| < 1.2   | ❌ |
 
 ### Reporting a Vulnerability
 
@@ -48,8 +48,8 @@ Out-of-scope:
 
 | 版本 | 是否支持 |
 | --- | --- |
-| 1.0.x   | ✅ |
-| < 1.0   | ❌ |
+| 1.2.x   | ✅ |
+| < 1.2   | ❌ |
 
 ### 报告漏洞
 
