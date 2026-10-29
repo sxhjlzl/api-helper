@@ -1,8 +1,6 @@
-<p align="center">
-  <img src="docs/images/cover.png" alt="ApiHelper" width="100%">
-</p>
+<h1 align="center">ApiHelper</h1>
 
-<h3 align="center">All-in-One Spring API Navigation, Documentation &amp; Debugging Assistant for IntelliJ IDEA</h3>
+<p align="center"><b>All-in-One Spring API Navigation, Documentation &amp; Debugging Assistant for IntelliJ IDEA</b></p>
 
 <p align="center">
   <a href="https://plugins.jetbrains.com/plugin/32327-apihelper"><img src="https://img.shields.io/jetbrains/plugin/v/32327-apihelper?style=flat-square&label=Marketplace&color=0ea5e9" alt="Marketplace Version"></a>
@@ -24,7 +22,7 @@
 
 ---
 
-**ApiHelper** is built for developers working with **Spring MVC**, **Spring Cloud OpenFeign**, and **Spring 6 `@HttpExchange`**. It brings endpoint discovery, bidirectional source navigation, Markdown API documentation, cURL export, and multi-environment HTTP debugging straight into IntelliJ IDEA—eliminating constant context switching.
+**ApiHelper** is built for developers working with **Spring MVC**, **Spring Cloud OpenFeign**, and **Spring 6 `@HttpExchange`**. It brings the most frequent daily tasks — finding endpoints, jumping between client and server, writing docs, and sending requests — directly into IntelliJ IDEA, eliminating constant context switching.
 
 ## Core Capabilities
 
@@ -39,16 +37,14 @@
 | **cURL & Markdown Docs** | One-click export of ready-to-run cURL commands and Markdown API docs with field descriptions. |
 | **Spring Config Aware** | Resolves `application*.yml` for port, `context-path`, and `${var:default}` placeholders; supports both Java & Kotlin via UAST. |
 
----
-
 ## Quick Start
 
-### 1. Installation
+### Installation
 
-- **From JetBrains Marketplace (Recommended)**: Open `Settings` → `Plugins` → `Marketplace` in IDEA, search for **ApiHelper**, and click **Install**, or visit [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/32327-apihelper).
-- **From Disk**: Run `./gradlew :buildPlugin` and install `build/distributions/api-helper-<version>.zip` via `Install Plugin from Disk...`.
+- **From JetBrains Marketplace (Recommended)**: `Settings` → `Plugins` → `Marketplace`, search for **ApiHelper** and click **Install**; or visit [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/32327-apihelper).
+- **From Disk**: Run `./gradlew :buildPlugin`, then install `build/distributions/api-helper-<version>.zip` via `Install Plugin from Disk...`.
 
-### 2. Common Workflows
+### Common Workflows
 
 | Workflow | Trigger | What It Does |
 | :--- | :--- | :--- |
@@ -59,8 +55,6 @@
 | **Switch Env & Global Token** | `Base URL` / `Global Params` tabs | Manage environment URLs and common headers in visual tables |
 | **Replay Debug History** | `History` tab / Debugger `History` button | Double-click to restore the request and response |
 
----
-
 ## Settings
 
 Path: `Settings` → `Tools` → `ApiHelper`
@@ -69,9 +63,7 @@ Path: `Settings` → `Tools` → `ApiHelper`
 - **Connect & Request Timeouts**: Customize HTTP connect timeout (default `30s`) and request timeout (default `60s`), with automatic IDE HTTP proxy support.
 - **Environments & Global Headers**: Synced bidirectionally with the **Base URL** and **Global Params** tool window tabs.
 
----
-
-## Compatibility & Build
+## Compatibility
 
 | Item | Requirement |
 | :--- | :--- |
@@ -102,19 +94,20 @@ src/main/kotlin/com/lizhuolun/apihelper/
 ├── ApiHelperBundle.kt        # Bilingual i18n resource bundle
 ├── cache/                    # Inverted-index mapping cache & SmartPointer cache
 ├── config/                   # Spring config reader, profile resolver & placeholder parser
-├── core/                     # HTTP mapping model, path builder & annotation parser
+├── core/                     # HTTP mapping model, path builder, annotation parser & contract check
+├── inspection/               # On-the-fly contract inspection & quick fix
 ├── listener/                 # Async startup warmup & debounced PSI listener
 ├── provider/                 # Icons & Java/Kotlin bidirectional LineMarker providers
 ├── scanner/                  # Index-backed project endpoint scanner
 ├── settings/                 # Persistent settings state & Configurable UI
-└── ui/                       # Multi-tab tool window, endpoint tree, search popup & debugger
+└── ui/                       # Multi-tab tool window, endpoint tree, search popup, contract report & debugger
 ```
 
 </details>
 
 ---
 
-## Feedback & Support
+## Feedback &amp; Support
 
 - Current Version: **`1.2.1`** (see [CHANGELOG_en.md](./CHANGELOG_en.md) for full release notes)
 - Found a bug or have a feature request? Feel free to open an issue on [GitHub Issues](https://github.com/sxhjlzl/api-helper/issues).

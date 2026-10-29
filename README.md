@@ -1,8 +1,6 @@
-<p align="center">
-  <img src="docs/images/cover.png" alt="ApiHelper" width="100%">
-</p>
+<h1 align="center">ApiHelper</h1>
 
-<h3 align="center">Spring 微服务接口导航、文档与调试一体化 IDEA 插件</h3>
+<p align="center"><b>Spring 微服务接口导航、文档与调试一体化 IDEA 插件</b></p>
 
 <p align="center">
   <a href="https://plugins.jetbrains.com/plugin/32327-apihelper"><img src="https://img.shields.io/jetbrains/plugin/v/32327-apihelper?style=flat-square&label=Marketplace&color=0ea5e9" alt="Marketplace Version"></a>
@@ -24,9 +22,9 @@
 
 ---
 
-**ApiHelper** 专为使用 **Spring MVC**、**Spring Cloud OpenFeign** 与 **Spring 6 `@HttpExchange`** 的开发者打造。它将日常开发中最频繁的「找接口、跳对端、抄路径、写文档、发请求」全部收敛进 IntelliJ IDEA，让你无需在代码编辑器、YML 配置文件与外部接口工具之间来回切换。
+**ApiHelper** 专为使用 **Spring MVC**、**Spring Cloud OpenFeign** 与 **Spring 6 `@HttpExchange`** 的开发者打造，把日常开发中最高频的「找接口、跳对端、写文档、发请求」收敛进 IntelliJ IDEA，无需在编辑器、配置文件与外部接口工具之间来回切换。
 
-## 核心能力一览
+## 核心能力
 
 | 模块 | 核心特性 |
 | :--- | :--- |
@@ -39,16 +37,14 @@
 | **cURL & 文档导出** | 一键导出可直接执行的 cURL 命令与带字段说明的 Markdown 接口文档。 |
 | **Spring 配置感知** | 自动解析 `application*.yml` 的端口、`context-path` 与 `${var:default}` 占位符；基于 UAST 同时支持 Java 与 Kotlin。 |
 
----
-
 ## 快速上手
 
-### 1. 安装插件
+### 安装
 
-- **插件市场安装（推荐）**：在 IDEA 中打开 `Settings` → `Plugins` → `Marketplace`，搜索 **ApiHelper** 安装；或访问 [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/32327-apihelper)。
-- **本地构建安装**：执行 `./gradlew :buildPlugin`，在 IDEA 中通过 `Install Plugin from Disk...` 选择 `build/distributions/api-helper-<version>.zip`。
+- **插件市场（推荐）**：`Settings` → `Plugins` → `Marketplace`，搜索 **ApiHelper** 安装；或访问 [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/32327-apihelper)。
+- **本地构建**：执行 `./gradlew :buildPlugin`，然后在 IDEA 中通过 `Install Plugin from Disk...` 选择 `build/distributions/api-helper-<version>.zip`。
 
-### 2. 高频操作速查
+### 高频操作
 
 | 场景 | 触发方式 | 效果说明 |
 | :--- | :--- | :--- |
@@ -59,19 +55,15 @@
 | **切换环境与公共 Token** | `前置 URL` / `全局参数` 标签页 | 表格化配置环境域名与公共 Header，调试与导出自动生效 |
 | **回放历史调试请求** | `请求历史` 标签页 / 调试栏 `历史` | 双击还原当时的请求参数与响应内容 |
 
----
-
 ## 插件配置
 
 路径：`Settings` → `Tools` → `ApiHelper`
 
 - **Spring Active Profile**：手动指定激活的 profile（如 `dev,test`）；留空时自动从工程配置推断。
-- **调试连接 / 请求超时**：自定义 HTTP 连接超时（默认 `30s`）与整体请求超时（默认 `60s`），同时自动遵循 IDE 全局 HTTP 代理。
-- **环境与全局请求头**：与工具窗口内的「前置 URL」「全局参数」标签页双向实时同步。
+- **调试连接 / 请求超时**：自定义 HTTP 连接超时（默认 `30s`）与整体请求超时（默认 `60s`），自动遵循 IDE 全局 HTTP 代理。
+- **环境与全局请求头**：与工具窗口的「前置 URL」「全局参数」标签页双向实时同步。
 
----
-
-## 兼容性与构建
+## 兼容性
 
 | 环境项 | 版本与要求 |
 | :--- | :--- |
@@ -102,12 +94,13 @@ src/main/kotlin/com/lizhuolun/apihelper/
 ├── ApiHelperBundle.kt        # 中英双语国际化资源入口
 ├── cache/                    # 双边映射快照倒排索引缓存与 SmartPointer 缓存
 ├── config/                   # Spring 配置读取、profile 推断与占位符解析
-├── core/                     # HTTP 映射模型、路径规范化与注解解析（含组合元注解）
+├── core/                     # HTTP 映射模型、路径规范化、注解解析与契约体检
+├── inspection/               # 契约一致性编辑器实时检查与 QuickFix
 ├── listener/                 # 启动异步预热与 PSI 增量防抖监听
 ├── provider/                 # 图标资源与 Java/Kotlin 双向 LineMarker
 ├── scanner/                  # 基于 AnnotatedElementsSearch 的全工程端点扫描
 ├── settings/                 # 全局持久化配置与 Settings 页面
-└── ui/                       # 多标签页工具窗口、接口树、全局搜索弹窗与调试面板
+└── ui/                       # 多标签页工具窗口、接口树、搜索弹窗、体检报告与调试面板
 ```
 
 </details>
