@@ -2,6 +2,12 @@
 
 本文件记录 ApiHelper 插件的版本变更。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.2.1] - 2026-10-29
+
+### 新增
+
+- 接入 JetBrains Marketplace 官方错误上报通道：当插件引发 IDE 异常或界面卡死（freeze）时，用户可主动将异常堆栈与线程转储上报至 Marketplace 后台，帮助更快定位与修复线上问题。仅上报诊断堆栈，不收集源代码、项目数据或个人信息。
+
 ## [1.2.0] - 2026-10-27
 
 ### 新增

@@ -2,6 +2,12 @@
 
 All notable changes to the ApiHelper plugin are documented in this file. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] - 2026-10-29
+
+### Added
+
+- Integrated the official JetBrains Marketplace error reporter: when the plugin causes an IDE exception or UI freeze, users can submit the stack trace and thread dumps to the Marketplace dashboard, helping issues surface and get fixed faster. Only diagnostic stacks are reported — no source code, project data, or personal information is collected.
+
 ## [1.2.0] - 2026-10-27
 
 ### Added

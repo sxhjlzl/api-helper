@@ -45,6 +45,10 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.2.1</h3>
+        <ul>
+            <li>Added the official JetBrains Marketplace error reporter: IDE exceptions and UI freezes caused by the plugin can now be submitted with stack traces and thread dumps, helping issues surface faster. Only diagnostic stacks are reported — no source code, project data, or personal information is collected.</li>
+        </ul>
         <h3>1.2.0</h3>
         <ul>
             <li>New <b>Contract</b> tool window tab that reports protocol mismatches between Feign / HttpExchange and Controller endpoints, grouped by severity, with Markdown export.</li>
@@ -207,6 +211,9 @@
                 displayType="BALLOON"
                 bundle="messages.ApiHelperBundle"
                 key="notification.group.name"/>
+
+        <!-- 异常与卡顿（freeze）上报：仅诊断堆栈，汇总到 JetBrains Marketplace 后台 -->
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
 
     </extensions>
 
