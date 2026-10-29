@@ -33,8 +33,8 @@
 | **6-Tab Native Workspace** | Native top-level tabs for **Interfaces**, **Contract**, **Debug**, **Base URL**, **History**, and **Global Params**, each with full window height. |
 | **API Contract Check** | Compares parameter names, path variables, and duplicate mappings between the two sides, surfacing production-only 400s / 404s right in the editor, with one-click fix and Markdown report export. |
 | **Reverse Caller Lookup** | Right-click a Controller method → **Show Callers** to list every Feign client calling it — something native Find Usages cannot see. |
-| **Smart API Debugger** | Auto-prefilled parameters with recursive nested-DTO JSON drafts, multi-environment switching, draft persistence, and 30-request history replay. |
-| **cURL & Markdown Docs** | One-click export of ready-to-run cURL commands and Markdown API docs with field descriptions. |
+| **Smart API Debugger** | Auto-prefilled parameters with recursive nested-DTO JSON drafts, multi-environment switching, draft persistence, and 30-request history replay; `{{variables}}` and auth presets close the login-token loop. |
+| **cURL / Docs / OpenAPI** | One-click export of cURL commands, Markdown API docs, and OpenAPI 3.0 JSON, plus cURL import from the clipboard back into the debugger. |
 | **Spring Config Aware** | Resolves `application*.yml` for port, `context-path`, and `${var:default}` placeholders; supports both Java & Kotlin via UAST. |
 
 ## Quick Start
@@ -109,6 +109,6 @@ src/main/kotlin/com/lizhuolun/apihelper/
 
 ## Feedback &amp; Support
 
-- Current Version: **`1.2.1`** (see [CHANGELOG_en.md](./CHANGELOG_en.md) for full release notes)
+- Current Version: **`1.2.2`** (see [CHANGELOG_en.md](./CHANGELOG_en.md) for full release notes)
 - Found a bug or have a feature request? Feel free to open an issue on [GitHub Issues](https://github.com/sxhjlzl/api-helper/issues).
 - If **ApiHelper** saves you time, a **Star** on GitHub is greatly appreciated!

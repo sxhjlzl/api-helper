@@ -9,6 +9,7 @@ import com.lizhuolun.apihelper.core.contract.rules.DuplicateMappingRule
 import com.lizhuolun.apihelper.core.contract.rules.OrphanEndpointRule
 import com.lizhuolun.apihelper.core.contract.rules.ParamNameMismatchRule
 import com.lizhuolun.apihelper.core.contract.rules.PathVariableRule
+import com.lizhuolun.apihelper.core.contract.rules.RequiredMismatchRule
 
 /**
  * 契约体检引擎：把双边快照装配成配对上下文，依次执行规则并汇总结果。
@@ -62,6 +63,7 @@ class ContractChecker(
             DuplicateMappingRule(),
             ParamNameMismatchRule(),
             PathVariableRule(),
+            RequiredMismatchRule(),
         )
 
         /**

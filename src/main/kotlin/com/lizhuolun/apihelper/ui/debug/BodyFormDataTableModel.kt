@@ -99,6 +99,22 @@ class BodyFormDataTableModel : AbstractTableModel() {
     }
 
     /**
+     * 使用参数行列表重置表格（用于 cURL 导入等批量填充场景）。
+     *
+     * @param newRows 参数行列表
+     */
+    fun setRows(newRows: List<DebugParameterRow>) {
+        rows.clear()
+        rows.addAll(
+            newRows
+                .filter { it.name.isNotBlank() }
+                .map { it.copy() },
+        )
+        ensureTrailingBlankRow()
+        fireTableDataChanged()
+    }
+
+    /**
      * 返回启用且参数名非空的参数行。
      *
      * @return form-data 参数列表
