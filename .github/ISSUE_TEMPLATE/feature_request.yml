@@ -1,0 +1,48 @@
+name: 💡 功能建议 / Feature Request
+description: 描述一个具体场景下缺失的能力 / Describe a capability that is missing in a concrete scenario
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请优先描述**场景与痛点**，而不是直接给出实现方案——同一痛点往往有更轻的解法。
+
+        Describe the **scenario and pain point** first; implementation ideas are welcome afterwards.
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 使用场景 / Scenario
+      description: 你在做什么事情时卡住了？现在是怎么绕过去的？
+      placeholder: 例如：我有 40 个微服务，改一个 DTO 字段后想确认哪些 Feign 客户端会受影响……
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的效果 / Expected behavior
+      description: 你希望插件做什么？在哪个菜单位置、以什么形式呈现？
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 你现在的替代方案 / Current workaround
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: 使用频率 / How often would this matter
+      options:
+        - 每天都会用到 / Daily
+        - 每周 / Weekly
+        - 偶尔 / Occasionally
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: 是否愿意参与 / Willingness to contribute
+      options:
+        - label: 我可以提供可复现的样例工程 / I can provide a sample project
+        - label: 我可以帮忙验证修复 / I can help verify a fix

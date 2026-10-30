@@ -40,6 +40,7 @@ enum class ContractParamKind {
  * @property explicitName 注解上显式写出的名字，例如 `@RequestParam("userId")` 中的 `userId`；未写时为 null
  * @property sourceName 源码中的参数名，例如 `String userId` 中的 `userId`
  * @property required 声明为必填时为 true；注解缺省按 Spring 语义视为 true
+ * @property requiredDeclared 注解上是否显式写出了 required 属性（用于「仅比较显式声明」的误报控制）
  * @property typeText 参数类型的规范文本，例如 `java.util.List<java.lang.String>`
  * @author lizhuolun
  * @date 2026/10/27
@@ -50,6 +51,7 @@ data class ContractParam(
     val sourceName: String,
     val required: Boolean,
     val typeText: String,
+    val requiredDeclared: Boolean = false,
 ) {
 
     /**

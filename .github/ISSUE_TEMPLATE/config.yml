@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: 🔐 报告安全漏洞 / Report a security vulnerability
+    url: https://github.com/sxhjlzl/api-helper/security/advisories/new
+    about: 请勿公开提交安全问题，使用私有漏洞报告通道 / Please do not open a public issue for security problems
+
+  - name: 📦 安装与更新 / Installation & updates
+    url: https://plugins.jetbrains.com/plugin/32327-apihelper
+    about: 在 JetBrains Marketplace 获取最新版本 / Get the latest build from JetBrains Marketplace
+
+  - name: 📖 使用说明 / Documentation
+    url: https://github.com/sxhjlzl/api-helper#readme
+    about: 先看 README，多数配置类问题已有说明 / Most configuration questions are already answered here

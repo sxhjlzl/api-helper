@@ -33,8 +33,8 @@
 | **六合一工作区** | **`接口`**、**`体检`**、**`调试`**、**`前置 URL`**、**`请求历史`**、**`全局参数`** 六大原生标签页，各自拥有完整窗口高度。 |
 | **接口契约体检** | 自动比对两端参数名、路径变量与重复映射，把上线后才暴露的 400 / 404 提前到编辑器波浪线，支持一键修复与 Markdown 报告导出。 |
 | **反向调用方查询** | Controller 方法右键「查看调用方」，列出所有调用它的 Feign 客户端——IDE 原生 Find Usages 覆盖不到的能力。 |
-| **智能 API 调试** | 自动预填参数并递归展开嵌套 DTO 生成 JSON 草稿，支持多环境切换、草稿记忆与 30 条历史回放。 |
-| **cURL & 文档导出** | 一键导出可直接执行的 cURL 命令与带字段说明的 Markdown 接口文档。 |
+| **智能 API 调试** | 自动预填参数并递归展开嵌套 DTO 生成 JSON 草稿，支持多环境切换、草稿记忆与 30 条历史回放；`{{变量}}` 插值与认证预设打通登录鉴权链路。 |
+| **cURL / 文档 / OpenAPI** | 一键导出 cURL 命令、Markdown 接口文档与 OpenAPI 3.0 JSON，并支持从剪贴板导入 cURL 回填调试器。 |
 | **Spring 配置感知** | 自动解析 `application*.yml` 的端口、`context-path` 与 `${var:default}` 占位符；基于 UAST 同时支持 Java 与 Kotlin。 |
 
 ## 快速上手
@@ -109,6 +109,6 @@ src/main/kotlin/com/lizhuolun/apihelper/
 
 ## 反馈与支持
 
-- 当前版本：**`1.2.1`**（完整变更记录见 [CHANGELOG.md](./CHANGELOG.md)）
+- 当前版本：**`1.2.2`**（完整变更记录见 [CHANGELOG.md](./CHANGELOG.md)）
 - 遇到问题或有新功能想法？欢迎提交 [GitHub Issue](https://github.com/sxhjlzl/api-helper/issues)。
 - 如果 **ApiHelper** 提升了你的开发效率，欢迎给仓库点亮一颗 **Star** 支持！

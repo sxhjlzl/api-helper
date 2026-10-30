@@ -165,12 +165,15 @@ object ContractSignatureExtractor {
         val annotation = parameter.modifierList?.findAnnotation(annotationFqn)
         val explicitName = annotation?.let { readExplicitName(it) }
         val required = annotation?.let { readBooleanAttribute(it, "required") } ?: true
+        // 只认源码里显式写出的 required 属性，注解缺省值不参与「必填性不一致」判定
+        val requiredDeclared = annotation?.findDeclaredAttributeValue("required") != null
         return ContractParam(
             kind = kind,
             explicitName = explicitName,
             sourceName = parameter.name,
             required = required,
             typeText = parameter.type.canonicalText,
+            requiredDeclared = requiredDeclared,
         )
     }
 

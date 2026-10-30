@@ -13,6 +13,7 @@ import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressManager
@@ -39,6 +40,7 @@ import java.awt.CardLayout
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.FlowLayout
+import java.awt.datatransfer.StringSelection
 import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
@@ -256,6 +258,8 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
                 locateCurrentEditorEndpoint()
             })
             addSeparator()
+            add(ToolbarAction(ApiHelperBundle.message("toolwindow.action.export.openapi"), AllIcons.FileTypes.Json) { exportOpenApi() })
+            addSeparator()
             add(GroupByModuleToggleAction())
             add(filterGroup)
         }
@@ -423,6 +427,26 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
             .getNotificationGroup("ApiHelper")
             .createNotification(content, NotificationType.INFORMATION)
             .notify(project)
+    }
+
+    /**
+     * 导出全工程端点为 OpenAPI 3.0 JSON 并复制到剪贴板；导出在后台线程执行，避免阻塞 EDT。
+     */
+    private fun exportOpenApi() {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val result = com.lizhuolun.apihelper.ui.openapi.OpenApiExporter.export(project) ?: return@executeOnPooledThread
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+                if (result.operationCount == 0) {
+                    notifyBalloon(ApiHelperBundle.message("toolwindow.notification.openapi.empty"))
+                    return@invokeLater
+                }
+                CopyPasteManager.getInstance().setContents(StringSelection(result.json))
+                notifyBalloon(
+                    ApiHelperBundle.message("toolwindow.notification.openapi.copied", result.operationCount),
+                )
+            }
+        }
     }
 
     private fun toggleSearch() {

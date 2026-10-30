@@ -118,7 +118,9 @@ class ApiHelperConfigurable : Configurable {
             envManagePanel.exportSelectedEnvironmentName() != state.selectedEnvironmentName ||
             globalParamsPanel.exportGlobalHeadersText() != state.globalHeadersText.trim() ||
             globalParamsPanel.exportGlobalQueriesText() != state.globalQueriesText.trim() ||
-            globalParamsPanel.exportGlobalCookiesText() != state.globalCookiesText.trim()
+            globalParamsPanel.exportGlobalCookiesText() != state.globalCookiesText.trim() ||
+            globalParamsPanel.exportGlobalVariablesText() != state.globalVariablesText.trim() ||
+            globalParamsPanel.exportEnvironmentVariablesText() != state.environmentVariablesText.trim()
     }
 
     override fun apply() {

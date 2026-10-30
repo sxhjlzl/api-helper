@@ -64,6 +64,7 @@ import javax.swing.BorderFactory
 import javax.swing.DefaultCellEditor
 import javax.swing.Icon
 import javax.swing.JButton
+import javax.swing.JCheckBox
 import javax.swing.JComboBox
 import javax.swing.JComponent
 import javax.swing.JFileChooser
@@ -128,6 +129,9 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
     }
     private val copyCurlButton = IconActionButton(AllIcons.Actions.Copy, ApiHelperBundle.message("toolwindow.action.copy.curl")).apply {
         addActionListener { copyCurrentCurl() }
+    }
+    private val importCurlButton = IconActionButton(AllIcons.Actions.MenuPaste, ApiHelperBundle.message("debug.action.import.curl")).apply {
+        addActionListener { importCurlFromClipboard() }
     }
     private val resetDraftButton = IconActionButton(AllIcons.Actions.Rollback, ApiHelperBundle.message("debug.action.reset.draft")).apply {
         addActionListener { resetCurrentEndpointDraft() }
@@ -491,6 +495,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                 isOpaque = false
                 add(historyButton)
                 add(copyCurlButton)
+                add(importCurlButton)
                 add(resetDraftButton)
                 add(sendButton)
             }
@@ -505,18 +510,31 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
      */
     private fun buildRequestSection(): JPanel {
         requestTabPills.clear()
-        val tabsRow = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), JBUI.scale(4))).apply {
+        val pillsPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), JBUI.scale(4))).apply {
+            isOpaque = false
+            addRequestTabPill(this, TAB_QUERY, ApiHelperBundle.message("debug.tab.query"))
+            addRequestTabPill(this, TAB_BODY, ApiHelperBundle.message("debug.tab.body"))
+            addRequestTabPill(this, TAB_PATH, ApiHelperBundle.message("debug.tab.path"))
+            addRequestTabPill(this, TAB_HEADERS, ApiHelperBundle.message("debug.tab.headers"))
+            addRequestTabPill(this, TAB_COOKIES, ApiHelperBundle.message("debug.tab.cookies"))
+        }
+        val authButton = IconActionButton(AllIcons.Nodes.SecurityRole, ApiHelperBundle.message("debug.action.auth.preset")).apply {
+            addActionListener { event ->
+                (event.source as? Component)?.let { showAuthPresetPopup(it) }
+            }
+        }
+        val tabsRow = JPanel(BorderLayout()).apply {
             isOpaque = true
             background = UIUtil.getPanelBackground()
             border = BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, ApiHelperUiStyle.subtleGridColor()),
                 BorderFactory.createEmptyBorder(0, 4, 0, 4),
             )
-            addRequestTabPill(this, TAB_QUERY, ApiHelperBundle.message("debug.tab.query"))
-            addRequestTabPill(this, TAB_BODY, ApiHelperBundle.message("debug.tab.body"))
-            addRequestTabPill(this, TAB_PATH, ApiHelperBundle.message("debug.tab.path"))
-            addRequestTabPill(this, TAB_HEADERS, ApiHelperBundle.message("debug.tab.headers"))
-            addRequestTabPill(this, TAB_COOKIES, ApiHelperBundle.message("debug.tab.cookies"))
+            add(pillsPanel, BorderLayout.WEST)
+            add(JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(4), JBUI.scale(3))).apply {
+                isOpaque = false
+                add(authButton)
+            }, BorderLayout.EAST)
         }
 
         requestCardPanel.add(tableScrollPane(queryModel), TAB_QUERY)
@@ -821,6 +839,12 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                 addActionListener { copyResponseBody() }
             })
             add(toolbarDivider())
+            add(IconActionButton(AllIcons.Nodes.Variable, ApiHelperBundle.message("debug.action.extract.variable")).apply {
+                addActionListener { event ->
+                    (event.source as? Component)?.let { showExtractVariablePopup(it) }
+                }
+            })
+            add(toolbarDivider())
             add(responseBodyTypeBox)
         }
         return JPanel(BorderLayout()).apply {
@@ -857,6 +881,181 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                 )
                 .notify(project)
         }
+    }
+
+    /**
+     * 认证预设：一键向 Headers 写入常见认证头，值引用调试变量（如 {{token}}），随环境变量自动切换。
+     */
+    private data class AuthPreset(
+        val label: String,
+        val headerName: String,
+        val headerValue: String,
+    ) {
+        override fun toString(): String = label
+    }
+
+    /**
+     * 弹出认证方式预设列表。
+     *
+     * @param anchorComponent 弹层锚点组件
+     */
+    private fun showAuthPresetPopup(anchorComponent: Component) {
+        val presets = listOf(
+            AuthPreset("Bearer Token", "Authorization", "Bearer {{token}}"),
+            AuthPreset("Basic Auth", "Authorization", "Basic {{basicAuth}}"),
+            AuthPreset("API Key", "X-API-Key", "{{apiKey}}"),
+        )
+        JBPopupFactory.getInstance()
+            .createPopupChooserBuilder(presets)
+            .setTitle(ApiHelperBundle.message("debug.auth.preset.title"))
+            .setItemChosenCallback { preset -> applyAuthPreset(preset) }
+            .createPopup()
+            .showUnderneathOf(anchorComponent)
+    }
+
+    /**
+     * 把选中的认证预设写入 Headers 表，同名 Header 覆盖原值并启用。
+     */
+    private fun applyAuthPreset(preset: AuthPreset) {
+        val rows = headerModel.toAllRows().toMutableList()
+        val index = rows.indexOfFirst { it.name.equals(preset.headerName, ignoreCase = true) }
+        if (index >= 0) {
+            rows[index] = rows[index].copy(value = preset.headerValue, enabled = true)
+        } else {
+            rows += DebugParameterRow(enabled = true, name = preset.headerName, value = preset.headerValue)
+        }
+        headerModel.setRows(rows)
+        selectRequestTab(TAB_HEADERS)
+    }
+
+    /**
+     * 弹出“从响应提取变量”小面板：按 JSON 路径取值并保存为调试变量（全局或当前环境）。
+     *
+     * @param anchorComponent 弹层锚点组件
+     */
+    private fun showExtractVariablePopup(anchorComponent: Component) {
+        val body = lastResponseBody.trim()
+        if (!body.startsWith("{") && !body.startsWith("[")) {
+            if (!project.isDisposed) {
+                NotificationGroupManager.getInstance()
+                    .getNotificationGroup("ApiHelper")
+                    .createNotification(
+                        ApiHelperBundle.message("debug.notification.variables.not.json"),
+                        NotificationType.WARNING,
+                    )
+                    .notify(project)
+            }
+            return
+        }
+
+        val nameField = JBTextField("token").apply { ApiHelperUiStyle.applyTextField(this) }
+        val pathField = JBTextField("data.token").apply { ApiHelperUiStyle.applyTextField(this) }
+        val envName = (environmentBox.selectedItem as? EnvironmentOption)?.name.orEmpty()
+        val envScopeBox = JCheckBox(
+            ApiHelperBundle.message("debug.variables.popup.env.scope", envName.ifEmpty { "-" }),
+        ).apply {
+            isEnabled = envName.isNotEmpty()
+            isOpaque = false
+            font = ApiHelperUiStyle.labelFont()
+        }
+        val previewLabel = JBLabel().apply {
+            foreground = UIUtil.getContextHelpForeground()
+            font = ApiHelperUiStyle.smallFont()
+        }
+
+        fun currentValue(): String? = JsonValueExtractor.extract(body, pathField.text.trim())
+        fun refreshPreview() {
+            val value = currentValue()
+            previewLabel.text = value?.let { "→ $it" }
+                ?: ApiHelperBundle.message("debug.variables.popup.preview.empty")
+        }
+        val docListener = object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent) = refreshPreview()
+            override fun removeUpdate(e: DocumentEvent) = refreshPreview()
+            override fun changedUpdate(e: DocumentEvent) = refreshPreview()
+        }
+        nameField.document.addDocumentListener(docListener)
+        pathField.document.addDocumentListener(docListener)
+        refreshPreview()
+
+        val form = JPanel().apply {
+            isOpaque = false
+            layout = java.awt.GridBagLayout()
+            val gc = java.awt.GridBagConstraints().apply {
+                gridx = 0
+                gridy = 0
+                anchor = java.awt.GridBagConstraints.WEST
+                insets = JBUI.insets(2, 4)
+            }
+            fun addRow(labelKey: String, field: JComponent) {
+                add(JBLabel(ApiHelperBundle.message(labelKey)).apply { font = ApiHelperUiStyle.labelFont() }, gc)
+                gc.gridx = 1
+                gc.fill = java.awt.GridBagConstraints.HORIZONTAL
+                gc.weightx = 1.0
+                add(field, gc)
+                gc.gridx = 0
+                gc.weightx = 0.0
+                gc.fill = java.awt.GridBagConstraints.NONE
+                gc.gridy++
+            }
+            addRow("debug.variables.popup.name", nameField)
+            addRow("debug.variables.popup.path", pathField)
+            add(envScopeBox, gc)
+            gc.gridy++
+            add(previewLabel, gc)
+        }
+
+        val saveButton = JButton(ApiHelperBundle.message("debug.variables.popup.save")).apply {
+            ApiHelperUiStyle.applyToolbarPillButton(this)
+        }
+        val panel = JPanel(BorderLayout()).apply {
+            isOpaque = true
+            background = UIUtil.getPanelBackground()
+            border = BorderFactory.createEmptyBorder(JBUI.scale(6), JBUI.scale(6), JBUI.scale(6), JBUI.scale(6))
+            add(form, BorderLayout.CENTER)
+            add(JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0)).apply {
+                isOpaque = false
+                add(saveButton)
+            }, BorderLayout.SOUTH)
+        }
+
+        val popup = JBPopupFactory.getInstance()
+            .createComponentPopupBuilder(panel, pathField)
+            .setTitle(ApiHelperBundle.message("debug.variables.popup.title"))
+            .setMovable(true)
+            .setRequestFocus(true)
+            .createPopup()
+
+        saveButton.addActionListener {
+            val name = nameField.text.trim()
+            val value = currentValue()
+            if (name.isEmpty() || value == null) {
+                if (!project.isDisposed) {
+                    NotificationGroupManager.getInstance()
+                        .getNotificationGroup("ApiHelper")
+                        .createNotification(
+                            ApiHelperBundle.message("debug.notification.variables.extract.failed", pathField.text.trim()),
+                            NotificationType.WARNING,
+                        )
+                        .notify(project)
+                }
+                return@addActionListener
+            }
+            val scopeEnv = if (envScopeBox.isSelected && envScopeBox.isEnabled) envName else ""
+            ApiHelperSettings.getInstance().upsertVariable(name, value, scopeEnv)
+            if (!project.isDisposed) {
+                NotificationGroupManager.getInstance()
+                    .getNotificationGroup("ApiHelper")
+                    .createNotification(
+                        ApiHelperBundle.message("debug.notification.variables.saved", name),
+                        NotificationType.INFORMATION,
+                    )
+                    .notify(project)
+            }
+            popup.cancel()
+        }
+
+        popup.showUnderneathOf(anchorComponent)
     }
 
     private fun saveResponseToFile() {
@@ -917,6 +1116,69 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         currentRequestFuture?.cancel(true)
     }
 
+    /**
+     * 当前生效的调试变量表：全局变量为底，当前选中环境的同名变量覆盖全局值。
+     */
+    private fun currentVariables(): Map<String, String> {
+        val settings = ApiHelperSettings.getInstance()
+        val envName = (environmentBox.selectedItem as? EnvironmentOption)?.name.orEmpty()
+        return settings.resolveVariables(envName)
+    }
+
+    /**
+     * 对调试请求的各个部分执行 `{{var}}` 变量替换（form-data 的文件路径不替换）。
+     *
+     * @param input 原始请求参数
+     * @return 替换后的请求参数与未解析变量名列表
+     */
+    private fun applyVariables(input: DebugRequestInput): Pair<DebugRequestInput, List<String>> {
+        val variables = currentVariables()
+        val unresolved = LinkedHashSet<String>()
+        val resolvedUrl = VariableResolver.resolve(input.url, variables).also { unresolved += it.unresolved }.text
+        val (path, pathUnresolved) = VariableResolver.resolvePairs(input.path, variables)
+        val (query, queryUnresolved) = VariableResolver.resolvePairs(input.query, variables)
+        val (headers, headerUnresolved) = VariableResolver.resolvePairs(input.headers, variables)
+        val (cookies, cookieUnresolved) = VariableResolver.resolvePairs(input.cookies, variables)
+        val (urlEncoded, urlEncodedUnresolved) = VariableResolver.resolvePairs(input.urlEncoded, variables)
+        unresolved += pathUnresolved + queryUnresolved + headerUnresolved + cookieUnresolved + urlEncodedUnresolved
+        val body = VariableResolver.resolve(input.body, variables).also { unresolved += it.unresolved }.text
+        val formData = input.formData.map { row ->
+            if (row.type == BodyFormDataTableModel.TYPE_FILE) {
+                row
+            } else {
+                val result = VariableResolver.resolve(row.value, variables)
+                unresolved += result.unresolved
+                row.copy(value = result.text)
+            }
+        }
+        return input.copy(
+            url = resolvedUrl,
+            path = path,
+            query = query,
+            headers = headers,
+            cookies = cookies,
+            body = body,
+            formData = formData,
+            urlEncoded = urlEncoded,
+        ) to unresolved.toList()
+    }
+
+    /**
+     * 存在未解析变量时弹出警告通知，请求仍按原文继续发送。
+     *
+     * @param unresolved 未解析的变量名列表
+     */
+    private fun notifyUnresolvedVariables(unresolved: List<String>) {
+        if (unresolved.isEmpty() || project.isDisposed) return
+        NotificationGroupManager.getInstance()
+            .getNotificationGroup("ApiHelper")
+            .createNotification(
+                ApiHelperBundle.message("debug.notification.variables.unresolved", unresolved.joinToString(", ")),
+                NotificationType.WARNING,
+            )
+            .notify(project)
+    }
+
     private fun copyCurrentCurl() {
         saveCurrentDraftIfLoaded()
         val settings = ApiHelperSettings.getInstance()
@@ -931,16 +1193,31 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                 .joinToString("&") { (k, v) -> "${encode(k)}=${encode(v)}" }
             else -> requestBodyArea.text
         }
-        val curl = CurlCommandBuilder.build(
+        val rawInput = DebugRequestInput(
             method = methodBox.selectedItem?.toString().orEmpty(),
-            rawUrl = rawUrl,
-            pathParams = pathModel.toPairs(),
-            queryParams = mergedQueries,
+            url = rawUrl,
+            query = mergedQueries,
+            path = pathModel.toPairs(),
             headers = mergedHeaders,
             cookies = mergedCookies,
+            bodyType = selectedBodyType,
+            body = effectiveBodyText,
+            binaryPath = binaryPath,
+            formData = if (selectedBodyType == BodyType.FORM_DATA) formDataModel.toRows() else emptyList(),
+            urlEncoded = emptyList(),
+        )
+        val (input, unresolvedVariables) = applyVariables(rawInput)
+        notifyUnresolvedVariables(unresolvedVariables)
+        val curl = CurlCommandBuilder.build(
+            method = input.method,
+            rawUrl = input.url,
+            pathParams = input.path,
+            queryParams = input.query,
+            headers = input.headers,
+            cookies = input.cookies,
             contentType = selectedBodyType.contentType,
-            bodyText = effectiveBodyText,
-            formDataRows = if (selectedBodyType == BodyType.FORM_DATA) formDataModel.toRows() else emptyList(),
+            bodyText = input.body,
+            formDataRows = input.formData,
             binaryFilePath = if (selectedBodyType == BodyType.BINARY) binaryPath else "",
         )
         CopyPasteManager.getInstance().setContents(StringSelection(curl))
@@ -953,6 +1230,90 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
                 )
                 .notify(project)
         }
+    }
+
+    /**
+     * 从剪贴板导入 cURL 命令并填充调试面板；已有同名参数保留，新参数追加。
+     */
+    private fun importCurlFromClipboard() {
+        val text = runCatching {
+            CopyPasteManager.getInstance().contents
+                ?.getTransferData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String
+        }.getOrNull()
+        val parsed = text?.let(CurlCommandParser::parse)
+        if (parsed == null) {
+            if (!project.isDisposed) {
+                NotificationGroupManager.getInstance()
+                    .getNotificationGroup("ApiHelper")
+                    .createNotification(
+                        ApiHelperBundle.message("debug.notification.curl.import.failed"),
+                        NotificationType.WARNING,
+                    )
+                    .notify(project)
+            }
+            return
+        }
+
+        methodBox.selectedItem = parsed.method
+        urlField.text = parsed.url
+        mergePairsInto(queryModel, parsed.query)
+        mergePairsInto(headerModel, parsed.headers)
+        mergePairsInto(cookieModel, parsed.cookies)
+
+        val contentType = parsed.headers
+            .firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }
+            ?.second
+            .orEmpty()
+            .lowercase()
+        when {
+            parsed.binaryFilePath.isNotBlank() -> {
+                binaryPath = parsed.binaryFilePath
+                binaryPathLabel.text = parsed.binaryFilePath
+                selectBodyType(BodyType.BINARY)
+            }
+            parsed.formData.isNotEmpty() -> {
+                formDataModel.setRows(parsed.formData)
+                selectBodyType(BodyType.FORM_DATA)
+            }
+            parsed.bodyText.isNotBlank() && contentType.contains("x-www-form-urlencoded") -> {
+                val pairs = parsed.bodyText.split('&')
+                    .filter { it.isNotBlank() }
+                    .map { pair ->
+                        val idx = pair.indexOf('=')
+                        if (idx > 0) pair.substring(0, idx) to pair.substring(idx + 1) else pair to ""
+                    }
+                urlEncodedModel.setPairs(pairs)
+                selectBodyType(BodyType.URL_ENCODED)
+            }
+            parsed.bodyText.isNotBlank() -> {
+                requestBodyArea.text = parsed.bodyText
+                val trimmed = parsed.bodyText.trimStart()
+                selectBodyType(
+                    when {
+                        contentType.contains("xml") || trimmed.startsWith("<?xml") -> BodyType.XML
+                        contentType.contains("json") || trimmed.startsWith("{") || trimmed.startsWith("[") -> BodyType.JSON
+                        else -> BodyType.RAW
+                    },
+                )
+            }
+            else -> selectBodyType(BodyType.NONE)
+        }
+
+        requestStatusLabel.text = ApiHelperBundle.message("debug.status.curl.imported")
+        requestStatusLabel.foreground = UIUtil.getContextHelpForeground()
+    }
+
+    /**
+     * 把键值对合并进参数表，仅追加表内尚不存在的参数名。
+     */
+    private fun mergePairsInto(model: DebugParameterTableModel, pairs: List<Pair<String, String>>) {
+        if (pairs.isEmpty()) return
+        val rows = model.toAllRows().toMutableList()
+        for ((name, value) in pairs) {
+            if (name.isBlank() || rows.any { it.name.equals(name, ignoreCase = true) }) continue
+            rows += DebugParameterRow(enabled = true, name = name, value = value)
+        }
+        model.setRows(rows)
     }
 
     private fun sendRequest() {
@@ -987,7 +1348,7 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
         val mergedHeaders = CurlCommandBuilder.mergeHeaders(settings.parseGlobalHeaders(), headerModel.toPairs())
         val mergedQueries = CurlCommandBuilder.mergeHeaders(settings.parseGlobalQueries(), queryModel.toPairs())
         val mergedCookies = CurlCommandBuilder.mergeHeaders(settings.parseGlobalCookies(), cookieModel.toPairs())
-        val input = DebugRequestInput(
+        val rawInput = DebugRequestInput(
             method = methodBox.selectedItem?.toString().orEmpty(),
             url = rawUrl,
             query = mergedQueries,
@@ -1000,6 +1361,8 @@ class EndpointDebugPanel(private val project: Project) : JPanel(BorderLayout()) 
             formData = formDataModel.toRows(),
             urlEncoded = urlEncodedModel.toPairs(),
         )
+        val (input, unresolvedVariables) = applyVariables(rawInput)
+        notifyUnresolvedVariables(unresolvedVariables)
 
         enterSendingState()
         requestStatusLabel.text = "● ${ApiHelperBundle.message("debug.status.sending")}"

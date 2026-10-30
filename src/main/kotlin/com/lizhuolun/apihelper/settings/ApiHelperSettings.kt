@@ -69,6 +69,18 @@ class ApiHelperSettings : PersistentStateComponent<ApiHelperSettings.SettingsSta
          * 当前选中的调试环境名称，为空表示使用自动推断的本地端口地址。
          **/
         var selectedEnvironmentName: String = ""
+
+        /**
+         * 全局变量，多行文本，每行格式为 Name=Value 或 [disabled] Name=Value。
+         * 调试请求与 cURL 导出中的 {{Name}} 占位符会被替换为对应值。
+         **/
+        var globalVariablesText: String = ""
+
+        /**
+         * 环境级变量，多行文本，每行格式为 环境名.Name=Value 或 [disabled] 环境名.Name=Value。
+         * 仅在选择对应环境时生效，同名时覆盖全局变量。
+         **/
+        var environmentVariablesText: String = ""
     }
 
     /**
@@ -108,6 +120,75 @@ class ApiHelperSettings : PersistentStateComponent<ApiHelperSettings.SettingsSta
      */
     fun parseGlobalCookieRows(): List<DebugParameterRow> =
         parseParameterRows(internalState.globalCookiesText, charArrayOf('=', ':'))
+
+    /**
+     * 解析全部全局变量行（含未勾选禁用项）。
+     */
+    fun parseGlobalVariableRows(): List<DebugParameterRow> =
+        parseParameterRows(internalState.globalVariablesText, charArrayOf('='))
+
+    /**
+     * 解析全部环境级变量行（含未勾选禁用项），参数名形如 `环境名.变量名`。
+     */
+    fun parseEnvironmentVariableRows(): List<DebugParameterRow> =
+        parseParameterRows(internalState.environmentVariablesText, charArrayOf('='))
+
+    /**
+     * 计算指定环境下生效的变量表：全局变量为底，当前环境的同名变量覆盖全局值。
+     *
+     * @param environmentName 当前选中的环境名称，为空表示未选择环境（仅全局变量生效）
+     * @return 变量名到变量值的有序映射
+     */
+    fun resolveVariables(environmentName: String): Map<String, String> {
+        val resolved = LinkedHashMap<String, String>()
+        for (row in parseGlobalVariableRows()) {
+            if (row.enabled) {
+                resolved[row.name.trim()] = row.value
+            }
+        }
+        if (environmentName.isNotBlank()) {
+            val prefix = "${environmentName.trim()}."
+            for (row in parseEnvironmentVariableRows()) {
+                val name = row.name.trim()
+                if (row.enabled && name.startsWith(prefix) && name.length > prefix.length) {
+                    resolved[name.substring(prefix.length)] = row.value
+                }
+            }
+        }
+        return resolved
+    }
+
+    /**
+     * 写入或更新一个变量；同名变量覆盖原值并保持启用状态。
+     *
+     * @param name 变量名
+     * @param value 变量值
+     * @param environmentName 环境名称；非空时写入环境级变量（`环境名.变量名`），为空时写入全局变量
+     */
+    fun upsertVariable(name: String, value: String, environmentName: String = "") {
+        val key = name.trim()
+        if (key.isEmpty()) return
+        if (environmentName.isBlank()) {
+            internalState.globalVariablesText = upsertRowText(internalState.globalVariablesText, key, value)
+        } else {
+            internalState.environmentVariablesText =
+                upsertRowText(internalState.environmentVariablesText, "${environmentName.trim()}.$key", value)
+        }
+    }
+
+    /**
+     * 在多行键值文本中覆盖或追加一行。
+     */
+    private fun upsertRowText(raw: String, key: String, value: String): String {
+        val rows = parseParameterRows(raw, charArrayOf('=')).toMutableList()
+        val index = rows.indexOfFirst { it.name.trim() == key }
+        if (index >= 0) {
+            rows[index] = rows[index].copy(value = value, enabled = true)
+        } else {
+            rows += DebugParameterRow(enabled = true, name = key, value = value)
+        }
+        return formatParameterRows(rows, separator = "=")
+    }
 
     /**
      * 解析调试环境列表。

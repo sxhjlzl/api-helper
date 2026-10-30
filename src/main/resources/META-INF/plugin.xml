@@ -22,6 +22,9 @@
             <li><b>Endpoint explorer</b> — browse Controller and Feign / HttpExchange endpoints from the ApiHelper tool window.</li>
             <li><b>Markdown API docs</b> — copy endpoint documentation with request parameters, request body fields, response fields, and descriptions from Javadocs or Swagger annotations.</li>
             <li><b>API debugging</b> — send HTTP requests with query, path, header, cookie, and body parameters.</li>
+            <li><b>Template variables &amp; auth presets</b> — <code>{{var}}</code> placeholders with per-environment overrides, one-click variable extraction from JSON responses, and Bearer / Basic / API Key presets.</li>
+            <li><b>cURL import &amp; export</b> — paste a cURL command from the clipboard to fill the debugger, or copy the current request as cURL.</li>
+            <li><b>OpenAPI 3.0 export</b> — export all project endpoints as a standard OpenAPI JSON document, ready for Swagger UI, Apifox, or Postman.</li>
             <li><b>Body modes</b> — supports none, form-data, x-www-form-urlencoded, JSON, XML, raw, and binary requests.</li>
             <li><b>Large payload friendly</b> — streams file uploads and limits response preview size to reduce memory usage.</li>
             <li><b>Spring configuration aware</b> — automatically resolves <code>server.servlet.context-path</code>, <code>spring.mvc.servlet.path</code>, <code>application-{profile}.yml</code> and <code>${var:default}</code> placeholders.</li>
@@ -45,6 +48,15 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.2.2</h3>
+        <ul>
+            <li><b>Template variables</b> — <code>{{name}}</code> placeholders in URL, Path, Query, Header, Cookie, and Body values, managed in a new <b>Variables</b> sub-tab under Global Params; <code>EnvName.</code>-prefixed variables apply per environment and override same-named globals.</li>
+            <li><b>Extract variable from response</b> — save a JSON field (e.g. <code>data.token</code>) as a variable from the response toolbar, closing the "login → call with token" loop.</li>
+            <li><b>Auth presets</b> — one-click Bearer Token / Basic Auth / API Key headers that reference variables.</li>
+            <li><b>cURL import</b> — paste a cURL command from the clipboard into the debugger; method, URL, query, headers, cookies, and body (including form-data and binary) are parsed automatically.</li>
+            <li><b>OpenAPI 3.0 export</b> — export all Controller and Feign / HttpExchange endpoints as a standard OpenAPI JSON document from the Interfaces toolbar.</li>
+            <li>New contract rule <b>required-mismatch</b> — warns when the client marks a query parameter optional while the server explicitly requires it.</li>
+        </ul>
         <h3>1.2.1</h3>
         <ul>
             <li>Added the official JetBrains Marketplace error reporter: IDE exceptions and UI freezes caused by the plugin can now be submitted with stack traces and thread dumps, helping issues surface faster. Only diagnostic stacks are reported — no source code, project data, or personal information is collected.</li>

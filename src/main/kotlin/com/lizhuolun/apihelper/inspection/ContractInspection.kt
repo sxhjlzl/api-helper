@@ -21,6 +21,7 @@ import com.lizhuolun.apihelper.core.contract.ContractSignatureCache
 import com.lizhuolun.apihelper.core.contract.rules.OrphanEndpointRule
 import com.lizhuolun.apihelper.core.contract.rules.ParamNameMismatchRule
 import com.lizhuolun.apihelper.core.contract.rules.PathVariableRule
+import com.lizhuolun.apihelper.core.contract.rules.RequiredMismatchRule
 import com.lizhuolun.apihelper.inspection.quickfix.SyncParamNameFix
 import org.jetbrains.uast.UMethod
 
@@ -138,6 +139,7 @@ class ContractInspection : AbstractBaseUastLocalInspectionTool(UMethod::class.ja
             OrphanEndpointRule(),
             ParamNameMismatchRule(),
             PathVariableRule(),
+            RequiredMismatchRule(),
         )
     }
 }

@@ -1,0 +1,80 @@
+name: 🐞 Bug 报告 / Bug Report
+description: 报告一个可复现的问题 / Report a reproducible problem
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先确认：已安装**最新版本**（[Releases](https://github.com/sxhjlzl/api-helper/releases) 或 Marketplace），且问题能在重启 IDE 后复现。
+
+        Please make sure you are on the **latest version** and that the issue survives an IDE restart.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 现象与期望 / What happened vs. what you expected
+      placeholder: 实际发生了什么？你期望的行为是什么？
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      placeholder: |
+        1. 打开一个包含 @FeignClient 与 @RestController 的工程
+        2. 点击 ...
+        3. 看到 ...
+    validations:
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本 / Plugin version
+      placeholder: "1.2.1"
+    validations:
+      required: true
+  - type: input
+    id: ide-build
+    attributes:
+      label: IDE 版本 / IDE build
+      description: Help → About 中的 Build 号，例如 IU-243.26574.91
+      placeholder: IU-243.xxxxx
+    validations:
+      required: true
+  - type: dropdown
+    id: project-language
+    attributes:
+      label: 项目语言 / Project language
+      options:
+        - Java
+        - Kotlin
+        - Java + Kotlin
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 相关功能 / Affected area
+      options:
+        - Gutter 图标与跳转 / Gutter navigation
+        - 接口树与搜索 / Endpoint tree & search
+        - 契约体检 / Contract check
+        - 调试器 / Debugger
+        - 前置 URL、全局参数、变量 / Environments & variables
+        - 请求历史 / Request history
+        - 导出 cURL、Markdown、OpenAPI / Export
+        - 设置项 / Settings
+        - 其他 / Other
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或堆栈 / Logs or stack trace
+      description: Help → Show Log in Explorer 中的 idea.log 片段；若插件引发了 IDE 异常，请用 Marketplace 的 **Submit Diagnostic** 上报并在下方贴出 Trace ID。
+      render: shell
+  - type: textarea
+    id: extra
+    attributes:
+      label: 截图或补充信息 / Screenshots or extra context

@@ -2,6 +2,17 @@
 
 本文件记录 ApiHelper 插件的版本变更。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.2.2] - 2026-10-29
+
+### 新增
+
+- **调试变量插值**：URL、Path、Query、Header、Cookie 与 Body 支持 `{{变量名}}` 占位符；「全局参数」页新增 **`变量`** 子标签集中管理，以 `环境名.` 为前缀的变量仅在对应环境生效并覆盖同名全局变量；存在未定义变量时发送前弹出提醒。
+- **从响应提取变量**：调试面板响应工具栏新增「提取变量」，按 JSON 路径（如 `data.token`、`list[0].id`）把响应字段一键保存为变量，打通「登录 → 带 token 调接口」链路。
+- **认证快捷配置**：请求区新增认证预设入口，一键写入 Bearer Token / Basic Auth / API Key 请求头，值引用变量并随环境自动切换。
+- **cURL 导入**：调试栏新增「从剪贴板导入 cURL」，自动解析方法、URL、Query、Header、Cookie 与 Body（含 form-data 文件字段与 binary 文件）填充面板，与 cURL 导出形成双向闭环。
+- **OpenAPI 3.0 导出**：「接口」页工具栏新增「导出 OpenAPI」，把全工程 Controller 与 Feign / HttpExchange 端点导出为标准 OpenAPI 3.0 JSON（含参数、请求体与响应 Schema）并复制到剪贴板。
+- **契约体检新规则 `required-mismatch`**：客户端显式声明 `required=false` 而服务端显式要求必填时给出 WARNING，编辑器实时检查同步生效；仅比较两侧都显式声明 required 的参数。
+
 ## [1.2.1] - 2026-10-29
 
 ### 新增

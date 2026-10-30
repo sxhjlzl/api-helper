@@ -2,6 +2,17 @@
 
 All notable changes to the ApiHelper plugin are documented in this file. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.2] - 2026-10-29
+
+### Added
+
+- **Template variables**: `{{name}}` placeholders now work in URL, Path, Query, Header, Cookie, and Body values. A new **Variables** sub-tab in Global Params manages them; names prefixed with `EnvName.` apply only to that environment and override same-named globals. Unresolved variables trigger a warning before sending.
+- **Extract variable from response**: a new response-toolbar action saves a JSON field (e.g. `data.token`, `list[0].id`) as a variable in one click, closing the "login → call with token" loop.
+- **Auth presets**: one-click Bearer Token / Basic Auth / API Key headers referencing variables, switching automatically with the active environment.
+- **cURL import**: paste a cURL command from the clipboard into the debugger — method, URL, query, headers, cookies, and body (including form-data files and binary uploads) are parsed and filled in, completing the two-way cURL loop.
+- **OpenAPI 3.0 export**: a new Interfaces toolbar action exports all Controller and Feign / HttpExchange endpoints as a standard OpenAPI 3.0 JSON document (parameters, request body, and response schemas included) to the clipboard.
+- **New contract rule `required-mismatch`**: warns when the client explicitly marks a query parameter `required=false` while the server explicitly requires it, live in the editor; only parameters explicitly declared on both sides are compared.
+
 ## [1.2.1] - 2026-10-29
 
 ### Added
