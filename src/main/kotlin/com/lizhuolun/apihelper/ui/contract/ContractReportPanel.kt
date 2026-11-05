@@ -41,7 +41,7 @@ import javax.swing.tree.DefaultTreeModel
  * “契约体检”独立面板（对应工具窗口第 6 个一级标签页）。
  *
  * 采用与请求历史一致的上下结构：
- * - 顶部：标题、统计徽章与操作按钮（重新体检 / 复制报告）
+ * - 顶部：左侧标题，右侧「错误/警告计数 + 操作按钮」，计数为 0 时自动隐藏
  * - 中部：按规则分组的问题树，双击直达源码
  * - 底部：状态行，展示本次体检的端点数量与过期提示
  *
@@ -64,12 +64,14 @@ class ContractReportPanel(private val project: Project) : JPanel(BorderLayout())
 
     private val errorLabel = JBLabel().apply {
         font = ApiHelperUiStyle.smallFont(bold = true)
-        foreground = JBColorHolder.ERROR
+        iconTextGap = JBUI.scale(4)
+        isVisible = false
     }
 
     private val warningLabel = JBLabel().apply {
         font = ApiHelperUiStyle.smallFont(bold = true)
-        foreground = JBColorHolder.WARNING
+        iconTextGap = JBUI.scale(4)
+        isVisible = false
     }
 
     private val statusLabel = JBLabel().apply {
@@ -81,6 +83,8 @@ class ContractReportPanel(private val project: Project) : JPanel(BorderLayout())
     private val cardPanel = JPanel(cardLayout)
 
     private val emptyLabel = JBLabel(ApiHelperBundle.message("contract.empty.healthy")).apply {
+        icon = AllIcons.General.InspectionsOK
+        iconTextGap = JBUI.scale(8)
         horizontalAlignment = JLabel.CENTER
         foreground = UIUtil.getContextHelpForeground()
         font = ApiHelperUiStyle.labelFont()
@@ -117,6 +121,8 @@ class ContractReportPanel(private val project: Project) : JPanel(BorderLayout())
      * 触发一次体检并刷新界面。
      */
     fun refresh() {
+        errorLabel.isVisible = false
+        warningLabel.isVisible = false
         statusLabel.text = ApiHelperBundle.message("contract.status.checking")
         service.refresh { report -> render(report) }
     }
@@ -131,34 +137,25 @@ class ContractReportPanel(private val project: Project) : JPanel(BorderLayout())
             font = ApiHelperUiStyle.labelFont(bold = true)
         }
 
-        val statsBox = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(10), 0)).apply {
+        // 计数与按钮共用一行，统一 10px 间距，避免多层 FlowLayout 累积出不对称的内边距
+        val rightBox = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(10), 0)).apply {
             isOpaque = false
             add(errorLabel)
             add(warningLabel)
-        }
-
-        val leftBox = JPanel(BorderLayout(JBUI.scale(10), 0)).apply {
-            isOpaque = false
-            add(titleLabel, BorderLayout.WEST)
-            add(statsBox, BorderLayout.CENTER)
-        }
-
-        val actionsBox = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(6), 0)).apply {
-            isOpaque = false
             add(refreshButton)
             add(copyButton)
         }
 
-        return JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
+        return JPanel(BorderLayout()).apply {
             isOpaque = true
             background = UIUtil.getPanelBackground()
             border = BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, ApiHelperUiStyle.borderColor()),
-                BorderFactory.createEmptyBorder(0, JBUI.scale(8), 0, JBUI.scale(8)),
+                BorderFactory.createEmptyBorder(0, JBUI.scale(10), 0, 0),
             )
             ApiHelperUiStyle.applyHeaderHeight(this)
-            add(leftBox, BorderLayout.CENTER)
-            add(actionsBox, BorderLayout.EAST)
+            add(titleLabel, BorderLayout.CENTER)
+            add(rightBox, BorderLayout.EAST)
         }
     }
 
@@ -236,8 +233,8 @@ class ContractReportPanel(private val project: Project) : JPanel(BorderLayout())
 
     private fun render(report: ContractReport) {
         rebuildTree(report)
-        errorLabel.text = ApiHelperBundle.message("contract.badge.errors", report.errorCount)
-        warningLabel.text = ApiHelperBundle.message("contract.badge.warnings", report.warningCount)
+        updateStat(errorLabel, report.errorCount, AllIcons.General.Error, "contract.badge.errors")
+        updateStat(warningLabel, report.warningCount, AllIcons.General.Warning, "contract.badge.warnings")
 
         statusLabel.text = if (service.isStale()) {
             ApiHelperBundle.message("contract.status.stale", report.endpointCount)
@@ -245,6 +242,25 @@ class ContractReportPanel(private val project: Project) : JPanel(BorderLayout())
             ApiHelperBundle.message("contract.status.done", report.endpointCount)
         }
         showCard(if (report.isHealthy) CARD_EMPTY else CARD_TREE)
+    }
+
+    /**
+     * 更新单个计数标签：数量为 0 时整块收起，避免出现「0 个错误」这种噪音。
+     *
+     * @param label 目标标签
+     * @param count 问题数量
+     * @param icon 与严重级匹配的图标
+     * @param messageKey 带 `{0}` 占位符的文案 key
+     */
+    private fun updateStat(
+        label: JBLabel,
+        count: Int,
+        icon: javax.swing.Icon,
+        messageKey: String,
+    ) {
+        label.isVisible = count > 0
+        label.icon = icon
+        label.text = ApiHelperBundle.message(messageKey, count)
     }
 
     private fun rebuildTree(report: ContractReport) {
@@ -334,20 +350,6 @@ class ContractReportPanel(private val project: Project) : JPanel(BorderLayout())
             ContractSeverity.WARNING -> AllIcons.General.Warning
             ContractSeverity.INFO -> AllIcons.General.Information
         }
-    }
-
-    /**
-     * 严重级对应的主题色，避免在渲染器与标签间重复定义。
-     */
-    private object JBColorHolder {
-        val ERROR: java.awt.Color = com.intellij.ui.JBColor(
-            java.awt.Color(0xC0, 0x39, 0x2B),
-            java.awt.Color(0xF7, 0x6E, 0x6E),
-        )
-        val WARNING: java.awt.Color = com.intellij.ui.JBColor(
-            java.awt.Color(0xB8, 0x7A, 0x00),
-            java.awt.Color(0xE0, 0xA5, 0x4A),
-        )
     }
 
     private companion object {
