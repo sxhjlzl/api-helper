@@ -2,6 +2,16 @@
 
 All notable changes to the ApiHelper plugin are documented in this file. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.3] - 2026-11-05
+
+### Improved
+
+- **Contract tab header rebuilt**: the title now owns the left side, while the error and warning counts moved to the right as icon-plus-number labels next to the actions and collapse when zero, so "0 errors / 0 warnings" no longer takes up space.
+- Fixed asymmetric header padding: the title sat 10px from the left edge while the buttons ended 28px from the right; counts and actions now share a uniform 10px rhythm.
+- Counts are cleared while a scan runs, instead of showing the previous run's results.
+- Added a check icon to the empty state.
+- English counts changed from `1 errors` to `Errors: 1`.
+
 ## [1.2.2] - 2026-10-29
 
 ### Added

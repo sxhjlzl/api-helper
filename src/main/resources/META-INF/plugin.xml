@@ -48,6 +48,12 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.2.3</h3>
+        <ul>
+            <li>Reworked the <b>Contract</b> tab header: the title stays on the left, error and warning counts moved to the right as icon-plus-number labels next to the actions and collapse when zero.</li>
+            <li>Fixed asymmetric header padding between the title and the action buttons.</li>
+            <li>Counts are cleared while a scan is running instead of showing the previous run's results.</li>
+        </ul>
         <h3>1.2.2</h3>
         <ul>
             <li><b>Template variables</b> — <code>{{name}}</code> placeholders in URL, Path, Query, Header, Cookie, and Body values, managed in a new <b>Variables</b> sub-tab under Global Params; <code>EnvName.</code>-prefixed variables apply per environment and override same-named globals.</li>
