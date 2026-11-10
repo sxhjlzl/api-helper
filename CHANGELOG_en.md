@@ -2,6 +2,25 @@
 
 All notable changes to the ApiHelper plugin are documented in this file. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.4] - 2026-11-10
+
+### Added
+
+- Open endpoints in IDEA HTTP Client from the context menu, generating `.http` requests with the environment URL, parameters, and JSON body.
+- Added Module, Type, and Framework dropdown filters to Interfaces, with direct single-selection and checkbox-based multi-selection that combine with search and pairing filters.
+
+### Improved
+
+- Added theme-aware hover feedback to filter buttons, Shift+Enter counterpart navigation and Ctrl/Cmd+Enter debugging in the endpoint tree, and selection preservation across filtering and refreshes.
+
+### Fixed
+
+- Resolve cross-class string constants and nested constant concatenation in Spring MVC, Feign, and HttpExchange mapping annotations, fixing endpoint display and pairing for paths such as `PREFIX + "/path"`.
+
+### Removed
+
+- Removed the Contract tab, contract editor inspection, parameter-name quick fix, and report export. Navigation, debugging, filtering, and OpenAPI export remain available.
+
 ## [1.2.3] - 2026-11-05
 
 ### Improved

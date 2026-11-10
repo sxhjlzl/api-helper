@@ -328,6 +328,65 @@ class BilateralMappingCacheServiceTest : BasePlatformTestCase() {
         assertEquals("/api/v1/users", endpoints.single().url)
     }
 
+    fun testFeignClientMatchesControllerWhenPathsUseConstantExpressions() {
+        addSpringAnnotations()
+        myFixture.addFileToProject(
+            "example/ApiConstants.java",
+            """
+                package example;
+
+                interface ApiConstants {
+                    String NAME = "promotion";
+                    String PREFIX = "/rpc-api/promotion";
+                }
+            """.trimIndent(),
+        )
+        myFixture.configureByText(
+            "CouponController.java",
+            """
+                package example;
+
+                import org.springframework.web.bind.annotation.GetMapping;
+                import org.springframework.web.bind.annotation.RestController;
+
+                @RestController
+                class CouponController {
+                    @GetMapping("/rpc-api/promotion/coupon/list-by-user-id")
+                    String getCouponListByUserId() {
+                        return "ok";
+                    }
+                }
+            """.trimIndent(),
+        )
+        val feignFile = myFixture.configureByText(
+            "CouponApi.java",
+            """
+                package example;
+
+                import org.springframework.cloud.openfeign.FeignClient;
+                import org.springframework.web.bind.annotation.GetMapping;
+
+                @FeignClient(name = ApiConstants.NAME)
+                interface CouponApi {
+                    String PREFIX = ApiConstants.PREFIX + "/coupon";
+
+                    @GetMapping(PREFIX + "/list-by-user-id")
+                    String getCouponListByUserId();
+                }
+            """.trimIndent(),
+        ) as PsiJavaFile
+
+        val clientEndpoint = EndpointScanner.scanClientEndpoints(project).single()
+        assertEquals("/rpc-api/promotion/coupon/list-by-user-id", clientEndpoint.url)
+
+        val cache = BilateralMappingCacheService.of(project)
+        cache.clear()
+        cache.replaceController(EndpointScanner.scanControllerEndpoints(project, null))
+        val feignMethod = feignFile.classes.single().methods.single()
+
+        assertTrue(cache.hasControllerCounterpart(feignMethod))
+    }
+
     private fun addSpringAnnotations() {
         myFixture.addFileToProject(
             "org/springframework/web/bind/annotation/RestController.java",

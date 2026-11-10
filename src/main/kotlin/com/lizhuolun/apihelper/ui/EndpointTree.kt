@@ -8,12 +8,16 @@ import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.ide.scratch.ScratchFileService
+import com.intellij.ide.scratch.ScratchRootType
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.Computable
+import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.psi.NavigatablePsiElement
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.PsiParameter
@@ -31,6 +35,8 @@ import com.lizhuolun.apihelper.core.annotation.SpringAnnotations
 import com.lizhuolun.apihelper.settings.ApiHelperSettings
 import com.lizhuolun.apihelper.ui.callers.ShowEndpointCallersAction
 import com.lizhuolun.apihelper.ui.debug.CurlCommandBuilder
+import com.lizhuolun.apihelper.ui.debug.EndpointRequestData
+import com.lizhuolun.apihelper.ui.debug.HttpRequestFileBuilder
 import java.awt.BorderLayout
 import java.awt.datatransfer.StringSelection
 import java.awt.event.KeyAdapter
@@ -81,6 +87,10 @@ class EndpointTree(
      * 是否先按模块分组。
      */
     private var groupByModule: Boolean = false
+
+    private var moduleFilters: Set<String> = emptySet()
+    private var typeFilters: Set<EndpointTypeFilter> = emptySet()
+    private var frameworkFilters: Set<EndpointKind> = emptySet()
 
     /**
      * 配对状态过滤条件。
@@ -162,6 +172,25 @@ class EndpointTree(
     }
 
     /**
+     * 设置模块、端点类型与框架筛选条件，空集合表示全部。
+     *
+     * @param moduleNames 模块名集合
+     * @param types 端点类型集合
+     * @param frameworks 框架集合
+     */
+    fun setFacetFilters(
+        moduleNames: Set<String>,
+        types: Set<EndpointTypeFilter>,
+        frameworks: Set<EndpointKind>,
+    ) {
+        if (moduleFilters == moduleNames && typeFilters == types && frameworkFilters == frameworks) return
+        moduleFilters = moduleNames
+        typeFilters = types
+        frameworkFilters = frameworks
+        rebuildFilteredTree()
+    }
+
+    /**
      * 设置配对状态过滤模式并刷新树。
      *
      * @param filter 配对状态过滤枚举
@@ -173,29 +202,35 @@ class EndpointTree(
     }
 
     private fun rebuildFilteredTree() {
+        val selectedItem = (tree.lastSelectedPathComponent as? EndpointNode)?.item
         val query = EndpointSearchQuery.parse(currentFilterText)
         val filtered = allItems.filter { item ->
             val matchesQuery = query.isBlank || query.matches(item)
+            val matchesFacets = matchesFacetFilters(item, moduleFilters, typeFilters, frameworkFilters)
             val matchesPairing = when (pairingFilter) {
                 EndpointPairingFilter.ALL -> true
                 EndpointPairingFilter.PAIRED_ONLY -> item.hasCounterpart
                 EndpointPairingFilter.UNPAIRED_ONLY -> !item.hasCounterpart
             }
-            matchesQuery && matchesPairing
+            matchesQuery && matchesFacets && matchesPairing
         }
         filteredCount = filtered.size
         onCountsChanged?.invoke(allItems.size, filteredCount)
         treeModel.refresh(filtered, groupByModule = groupByModule)
         expandAll()
+        selectedItem?.let(::restoreSelection)
     }
 
     private fun setupListeners() {
         tree.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
-                if (e.keyCode == KeyEvent.VK_ENTER) {
-                    navigateSelected()
-                    e.consume()
+                if (e.keyCode != KeyEvent.VK_ENTER) return
+                when {
+                    e.isShiftDown -> navigateToCounterpart()
+                    (e.isControlDown || e.isMetaDown) && kind == EndpointKind.CONTROLLER -> debugSelectedEndpoint()
+                    else -> navigateSelected()
                 }
+                e.consume()
             }
         })
 
@@ -245,6 +280,14 @@ class EndpointTree(
     fun getTotalCount(): Int = allItems.size
 
     /**
+     * 获取当前端点数据包含的模块名。
+     *
+     * @return 去重并排序后的模块名
+     */
+    fun getAvailableModules(): List<String> =
+        allItems.map { it.moduleName.ifBlank { "default" } }.distinct().sorted()
+
+    /**
      * 获取当前过滤后显示的端点数量。
      *
      * @return 过滤后端点数量
@@ -286,6 +329,37 @@ class EndpointTree(
         tree.scrollPathToVisible(treePath)
         tree.requestFocusInWindow()
         return true
+    }
+
+    private fun restoreSelection(item: EndpointTreeItem) {
+        val root = treeModel.root as? EndpointNode ?: return
+        val matchedPath = findItemPathRecursive(listOf(root), item) ?: return
+        val treePath = TreePath(matchedPath.toTypedArray())
+        tree.selectionPath = treePath
+        tree.scrollPathToVisible(treePath)
+    }
+
+    private fun findItemPathRecursive(
+        currentChain: List<EndpointNode>,
+        target: EndpointTreeItem,
+    ): List<EndpointNode>? {
+        val current = currentChain.last()
+        val currentItem = current.item
+        if (currentItem != null) {
+            val matched = currentItem.kind == target.kind &&
+                    currentItem.className == target.className &&
+                    currentItem.methodName == target.methodName &&
+                    currentItem.moduleName == target.moduleName &&
+                    currentItem.url == target.url &&
+                    currentItem.httpMethod == target.httpMethod
+            return if (matched) currentChain else null
+        }
+        for (i in 0 until current.childCount) {
+            val child = current.getChildAt(i) as? EndpointNode ?: continue
+            val found = findItemPathRecursive(currentChain + child, target)
+            if (found != null) return found
+        }
+        return null
     }
 
     private fun findMethodPathRecursive(
@@ -346,6 +420,11 @@ class EndpointTree(
             group.addSeparator()
         }
         group.add(popupAction(
+            ApiHelperBundle.message("toolwindow.action.open.http.client"),
+            AllIcons.Actions.Execute,
+        ) { openSelectedInHttpClient() })
+        group.addSeparator()
+        group.add(popupAction(
             ApiHelperBundle.message("toolwindow.action.navigate.source"),
             AllIcons.Actions.EditSource,
         ) { navigateSelected() })
@@ -400,6 +479,32 @@ class EndpointTree(
         onDebugRequested?.invoke(item)
     }
 
+    private fun openSelectedInHttpClient() {
+        val node = tree.lastSelectedPathComponent as? EndpointNode ?: return
+        val item = node.item ?: return
+        val pointer = node.pointer
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val requestText = ApplicationManager.getApplication().runReadAction(Computable {
+                if (project.isDisposed) return@Computable null
+                val method = pointer?.element?.takeIf { it.isValid }
+                buildHttpRequestForEndpoint(item, method)
+            }) ?: return@executeOnPooledThread
+            ApplicationManager.getApplication().invokeLater {
+                if (project.isDisposed) return@invokeLater
+                val fileName = "api-helper-${item.httpMethod.name.lowercase()}.http"
+                val scratchFile = ScratchFileService.getInstance().findFile(
+                    ScratchRootType.getInstance(),
+                    fileName,
+                    ScratchFileService.Option.create_new_always,
+                )
+                ApplicationManager.getApplication().runWriteAction {
+                    VfsUtil.saveText(scratchFile, requestText)
+                }
+                FileEditorManager.getInstance(project).openFile(scratchFile, true)
+            }
+        }
+    }
+
     private fun copySelectedUrl() {
         val node = tree.lastSelectedPathComponent as? EndpointNode ?: return
         val url = node.item?.url ?: return
@@ -427,6 +532,9 @@ class EndpointTree(
 
     internal fun buildCurlForEndpoint(item: EndpointTreeItem, method: PsiMethod?): String =
         Companion.buildCurlForEndpoint(item, method)
+
+    internal fun buildHttpRequestForEndpoint(item: EndpointTreeItem, method: PsiMethod?): String =
+        Companion.buildHttpRequestForEndpoint(item, method)
 
     private fun copySelectedAiMarkdown() {
         val node = tree.lastSelectedPathComponent as? EndpointNode ?: return
@@ -507,10 +615,44 @@ class EndpointTree(
 
     companion object {
 
+        internal fun matchesFacetFilters(
+            item: EndpointTreeItem,
+            moduleNames: Set<String>,
+            types: Set<EndpointTypeFilter>,
+            frameworks: Set<EndpointKind>,
+        ): Boolean {
+            val matchesModule = moduleNames.isEmpty() || item.moduleName.ifBlank { "default" } in moduleNames
+            val itemType = if (item.kind == EndpointKind.CONTROLLER) {
+                EndpointTypeFilter.SERVER
+            } else {
+                EndpointTypeFilter.CLIENT
+            }
+            val matchesType = types.isEmpty() || itemType in types
+            val matchesFramework = frameworks.isEmpty() || item.kind in frameworks
+            return matchesModule && matchesType && matchesFramework
+        }
+
         private fun effectiveHttpMethod(item: EndpointTreeItem): String =
             if (item.httpMethod.name == "ANY") "GET" else item.httpMethod.name
 
         internal fun buildCurlForEndpoint(item: EndpointTreeItem, method: PsiMethod?): String {
+            val request = buildRequestForEndpoint(item, method)
+            return CurlCommandBuilder.build(
+                method = request.method,
+                rawUrl = request.rawUrl,
+                pathParams = request.pathParams,
+                queryParams = request.queryParams,
+                headers = request.headers,
+                cookies = request.cookies,
+                contentType = request.contentType,
+                bodyText = request.bodyText,
+            )
+        }
+
+        internal fun buildHttpRequestForEndpoint(item: EndpointTreeItem, method: PsiMethod?): String =
+            HttpRequestFileBuilder.build(buildRequestForEndpoint(item, method))
+
+        private fun buildRequestForEndpoint(item: EndpointTreeItem, method: PsiMethod?): EndpointRequestData {
             val settings = ApiHelperSettings.getInstance()
             val selectedEnv = settings.parseEnvironments()
                 .firstOrNull { it.name == settings.state.selectedEnvironmentName }
@@ -580,7 +722,7 @@ class EndpointTree(
             val mergedHeaders = CurlCommandBuilder.mergeHeaders(settings.parseGlobalHeaders(), headerParams)
             val mergedQueries = CurlCommandBuilder.mergeHeaders(settings.parseGlobalQueries(), queryParams)
             val mergedCookies = CurlCommandBuilder.mergeHeaders(settings.parseGlobalCookies(), cookieParams)
-            return CurlCommandBuilder.build(
+            return EndpointRequestData(
                 method = effectiveHttpMethod(item),
                 rawUrl = fullUrl,
                 pathParams = pathParams,
@@ -721,6 +863,14 @@ class EndpointTree(
         val required: Boolean,
         val description: String,
     )
+}
+
+/**
+ * 端点类型筛选条件。
+ */
+enum class EndpointTypeFilter {
+    CLIENT,
+    SERVER,
 }
 
 /**

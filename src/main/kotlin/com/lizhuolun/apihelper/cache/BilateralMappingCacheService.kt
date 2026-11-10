@@ -11,7 +11,6 @@ import com.intellij.util.messages.MessageBus
 import com.lizhuolun.apihelper.core.EndpointKind
 import com.lizhuolun.apihelper.core.HttpMappingInfo
 import com.lizhuolun.apihelper.core.annotation.AnnotationParser
-import com.lizhuolun.apihelper.core.contract.BilateralSnapshot
 import com.lizhuolun.apihelper.scanner.EndpointScanner
 import com.lizhuolun.apihelper.settings.ApiHelperSettings
 import kotlinx.coroutines.CoroutineScope
@@ -118,7 +117,7 @@ class BilateralMappingCacheService(
 
     /**
      * 缓存版本号，任何写入（全量替换 / 增量覆盖 / 删除 / 清空）都会自增。
-     * 契约体检报告据此判断结果是否已过期。
+     * 批量操作据此判断已有快照是否可以复用。
      **/
     private val version = AtomicLong()
 
@@ -377,7 +376,7 @@ class BilateralMappingCacheService(
     }
 
     /**
-     * 获取一次性的双边只读快照，供契约体检在同一次遍历中使用。
+     * 获取一次性的双边只读快照，供 OpenAPI 导出等批量操作使用。
      *
      * 快照只做值拷贝，不访问 PSI，因此可以在任意线程调用；
      * 版本号变化时会重新构造，版本未变时直接复用上次结果。

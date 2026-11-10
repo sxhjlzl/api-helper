@@ -124,7 +124,7 @@ object CurlCommandBuilder {
         return result
     }
 
-    private fun applyPathParams(rawUrl: String, params: List<Pair<String, String>>): String {
+    internal fun applyPathParams(rawUrl: String, params: List<Pair<String, String>>): String {
         var url = rawUrl
         for ((name, value) in params) {
             if (name.isBlank() || value.isBlank()) continue
@@ -133,7 +133,7 @@ object CurlCommandBuilder {
         return url
     }
 
-    private fun appendQuery(rawUrl: String, query: List<Pair<String, String>>): String {
+    internal fun appendQuery(rawUrl: String, query: List<Pair<String, String>>): String {
         val pairs = query.filter { it.first.isNotBlank() }
         if (pairs.isEmpty()) return rawUrl
         val separator = when {

@@ -2,6 +2,25 @@
 
 本文件记录 ApiHelper 插件的版本变更。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.2.4] - 2026-11-10
+
+### 新增
+
+- 端点右键支持在 IDEA HTTP Client 中打开，自动生成包含环境地址、参数与 JSON Body 的 `.http` 请求。
+- 接口页新增模块、类型、框架三个下拉筛选器，支持单选与复选框多选，并与搜索、配对状态过滤组合使用。
+
+### 优化
+
+- 筛选按钮增加主题自适应悬停反馈；端点树支持 Shift+Enter 跳对端、Ctrl/Cmd+Enter 调试，并在筛选或刷新后保留选中端点。
+
+### 修复
+
+- 支持解析 Spring MVC、Feign 与 HttpExchange 映射注解中的跨类字符串常量及多层常量拼接，修复 `PREFIX + "/path"` 形式的端点无法正确展示与配对的问题。
+
+### 移除
+
+- 移除契约体检标签页、编辑器契约 Inspection、参数名 QuickFix 与报告导出；接口导航、调试、筛选和 OpenAPI 导出不受影响。
+
 ## [1.2.3] - 2026-11-05
 
 ### 优化
