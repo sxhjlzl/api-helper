@@ -3,6 +3,7 @@ package com.lizhuolun.apihelper.core.annotation
 import com.intellij.psi.PsiAnnotation
 import com.intellij.psi.PsiAnnotationMemberValue
 import com.intellij.psi.PsiArrayInitializerMemberValue
+import com.intellij.psi.PsiBinaryExpression
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiField
 import com.intellij.psi.PsiLiteralExpression
@@ -179,7 +180,7 @@ object AnnotationParser {
     // ============ 通用属性读取 ============
 
     /**
-     * 读取注解的字符串属性，支持字面量、字符串常量引用、字符串数组的第一个元素。
+     * 读取注解的字符串属性，支持字面量、字符串常量引用、常量拼接表达式、字符串数组的第一个元素。
      *
      * 返回 null 表示属性不存在或类型无法识别（调用方需要继续尝试别名）。
      */
@@ -190,7 +191,7 @@ object AnnotationParser {
 
     /**
      * 把任意 PsiAnnotationMemberValue 解析成字符串。
-     * 字符串常量引用、PsiField 初始化器、数组首元素都会被尝试解析。
+     * 字符串常量引用、PsiField 初始化器、常量拼接表达式、数组首元素都会被尝试解析。
      */
     private fun resolveStringMemberValue(value: PsiAnnotationMemberValue): String? {
         return when (value) {
@@ -199,7 +200,13 @@ object AnnotationParser {
                 val resolved = value.resolve()
                 if (resolved is PsiField) {
                     resolved.computeConstantValue() as? String
+                        ?: resolved.initializer?.let(::resolveStringMemberValue)
                 } else null
+            }
+            is PsiBinaryExpression -> {
+                val left = resolveStringMemberValue(value.lOperand)
+                val right = value.rOperand?.let(::resolveStringMemberValue)
+                if (left == null || right == null) null else left + right
             }
             is PsiArrayInitializerMemberValue -> {
                 val first = value.initializers.firstOrNull() ?: return null

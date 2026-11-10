@@ -22,7 +22,10 @@ import com.intellij.openapi.util.Computable
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiMethod
 import com.intellij.ui.SearchTextField
+import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBPanel
+import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.lizhuolun.apihelper.ApiHelperBundle
@@ -45,7 +48,9 @@ import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.BorderFactory
+import javax.swing.BoxLayout
 import javax.swing.Icon
+import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
@@ -112,18 +117,31 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
     }
 
     private val ideTabButtons = mutableListOf<JLabel>()
+    private val moduleFilterGroup = DefaultActionGroup(ApiHelperBundle.message("toolwindow.filter.module"), true)
+    private val typeFilterGroup = DefaultActionGroup(ApiHelperBundle.message("toolwindow.filter.type"), true)
+    private val frameworkFilterGroup = DefaultActionGroup(ApiHelperBundle.message("toolwindow.filter.framework"), true)
+    private val filterButtons = mutableMapOf<DefaultActionGroup, JButton>()
     private val toolbarComponent = buildToolbar()
+    private val filterBarComponent = buildFilterBar()
     private val ideTabBar = buildIdeTabBar()
+    private val filterAndTabPanel = JPanel(BorderLayout()).apply {
+        isOpaque = false
+        add(filterBarComponent, BorderLayout.NORTH)
+        add(ideTabBar, BorderLayout.SOUTH)
+    }
 
     private val headerPanel = JPanel(BorderLayout()).apply {
         isOpaque = false
         add(toolbarComponent, BorderLayout.NORTH)
-        add(ideTabBar, BorderLayout.CENTER)
+        add(filterAndTabPanel, BorderLayout.CENTER)
         add(searchBoxPanel, BorderLayout.SOUTH)
     }
 
     private var isSearchVisible: Boolean = false
     private var isGroupByModule: Boolean = false
+    private var selectedModules: Set<String> = emptySet()
+    private var selectedTypes: Set<EndpointTypeFilter> = emptySet()
+    private var selectedFrameworks: Set<EndpointKind> = emptySet()
     private var currentPairingFilter: EndpointPairingFilter = EndpointPairingFilter.ALL
     private var activeInterfaceTab: String = CARD_CONTROLLER
     private var controllerEndpointsLoaded: Boolean = false
@@ -215,6 +233,7 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
             if (project.isDisposed) return@invokeLater
             controllerTree.refresh(controllers)
             feignTree.refresh(clients)
+            updateModuleFilterActions()
         }
     }
 
@@ -244,7 +263,6 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
             add(PairingFilterToggleAction(ApiHelperBundle.message("toolwindow.filter.pairing.paired"), EndpointPairingFilter.PAIRED_ONLY))
             add(PairingFilterToggleAction(ApiHelperBundle.message("toolwindow.filter.pairing.unpaired"), EndpointPairingFilter.UNPAIRED_ONLY))
         }
-
         val actionGroup = DefaultActionGroup().apply {
             add(ToolbarAction(ApiHelperBundle.message("toolwindow.action.refresh"), AllIcons.Actions.Refresh) { refresh(forceScan = true) })
             add(ToolbarAction(ApiHelperBundle.message("toolwindow.action.search"), AllIcons.Actions.Search) { toggleSearch() })
@@ -276,6 +294,94 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
             )
             ApiHelperUiStyle.applyHeaderHeight(this)
             add(toolbar.component, BorderLayout.WEST)
+        }
+    }
+
+    private fun filterPopupButton(group: DefaultActionGroup): JButton =
+        JButton(group.templatePresentation.text, AllIcons.General.Dropdown).apply {
+            filterButtons[group] = this
+            font = ApiHelperUiStyle.labelFont()
+            foreground = UIUtil.getLabelForeground()
+            horizontalAlignment = SwingConstants.LEFT
+            horizontalTextPosition = SwingConstants.LEFT
+            verticalAlignment = SwingConstants.CENTER
+            isContentAreaFilled = false
+            isBorderPainted = false
+            isFocusPainted = false
+            isOpaque = false
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            border = BorderFactory.createEmptyBorder(0, JBUI.scale(2), 0, JBUI.scale(2))
+            addMouseListener(object : MouseAdapter() {
+                override fun mouseEntered(e: MouseEvent) {
+                    background = ApiHelperUiStyle.hoverBackgroundColor()
+                    isContentAreaFilled = true
+                    isOpaque = true
+                    repaint()
+                }
+
+                override fun mouseExited(e: MouseEvent) {
+                    isContentAreaFilled = false
+                    isOpaque = false
+                    repaint()
+                }
+            })
+            addActionListener {
+                ActionManager.getInstance()
+                    .createActionPopupMenu(ActionPlaces.POPUP, group)
+                    .component
+                    .show(this, 0, height)
+            }
+        }
+
+    private fun buildFilterBar(): JComponent {
+        moduleFilterGroup.add(FacetFilterToggleAction(
+            ApiHelperBundle.message("toolwindow.filter.all"),
+            { selectedModules.isEmpty() },
+        ) { selectedModules = emptySet(); applyFacetFilters() })
+        moduleFilterGroup.add(SelectFacetAction { showModuleSelection() })
+        moduleFilterGroup.addSeparator()
+
+        typeFilterGroup.add(FacetFilterToggleAction(
+            ApiHelperBundle.message("toolwindow.filter.all"),
+            { selectedTypes.isEmpty() },
+        ) { selectedTypes = emptySet(); applyFacetFilters() })
+        typeFilterGroup.add(SelectFacetAction { showTypeSelection() })
+        typeFilterGroup.addSeparator()
+        EndpointTypeFilter.entries.forEach { type ->
+            typeFilterGroup.add(FacetFilterToggleAction(
+                typeDisplayName(type),
+                { selectedTypes == setOf(type) },
+            ) { selectedTypes = setOf(type); applyFacetFilters() })
+        }
+
+        frameworkFilterGroup.add(FacetFilterToggleAction(
+            ApiHelperBundle.message("toolwindow.filter.all"),
+            { selectedFrameworks.isEmpty() },
+        ) { selectedFrameworks = emptySet(); applyFacetFilters() })
+        frameworkFilterGroup.add(SelectFacetAction { showFrameworkSelection() })
+        frameworkFilterGroup.addSeparator()
+        EndpointKind.entries.forEach { kind ->
+            frameworkFilterGroup.add(FacetFilterToggleAction(
+                frameworkDisplayName(kind),
+                { selectedFrameworks == setOf(kind) },
+            ) { selectedFrameworks = setOf(kind); applyFacetFilters() })
+        }
+
+        val buttons = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
+            isOpaque = false
+            add(filterPopupButton(moduleFilterGroup))
+            add(filterPopupButton(typeFilterGroup))
+            add(filterPopupButton(frameworkFilterGroup))
+        }
+        return JPanel(BorderLayout()).apply {
+            isOpaque = true
+            background = UIUtil.getPanelBackground()
+            border = BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, ApiHelperUiStyle.subtleGridColor()),
+                BorderFactory.createEmptyBorder(0, 6, 0, 6),
+            )
+            ApiHelperUiStyle.applyHeaderHeight(this)
+            add(buttons, BorderLayout.WEST)
         }
     }
 
@@ -367,7 +473,9 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         formatTabTitle(ApiHelperBundle.message("toolwindow.tab.feign"), total, filtered)
 
     private fun formatTabTitle(baseTitle: String, total: Int, filtered: Int): String {
-        val hasFilter = searchField.text.isNotBlank() || currentPairingFilter != EndpointPairingFilter.ALL
+        val hasFilter = searchField.text.isNotBlank() ||
+                currentPairingFilter != EndpointPairingFilter.ALL ||
+                hasActiveFacetFilters()
         return if (hasFilter && filtered != total) {
             "$baseTitle ($filtered/$total)"
         } else {
@@ -387,9 +495,13 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         if (trySelectMethodInTrees(method)) {
             return
         }
-        if (searchField.text.isNotBlank() || currentPairingFilter != EndpointPairingFilter.ALL) {
+        if (searchField.text.isNotBlank() || currentPairingFilter != EndpointPairingFilter.ALL || hasActiveFacetFilters()) {
             searchField.text = ""
             applyPairingFilter(EndpointPairingFilter.ALL)
+            selectedModules = emptySet()
+            selectedTypes = emptySet()
+            selectedFrameworks = emptySet()
+            applyFacetFilters()
             if (trySelectMethodInTrees(method)) {
                 return
             }
@@ -526,6 +638,28 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         }
     }
 
+    private inner class FacetFilterToggleAction(
+        text: String,
+        private val selected: () -> Boolean,
+        private val onSelect: () -> Unit,
+    ) : ToggleAction(text) {
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+        override fun isSelected(e: AnActionEvent): Boolean = selected()
+
+        override fun setSelected(e: AnActionEvent, state: Boolean) {
+            if (state) onSelect()
+        }
+    }
+
+    private inner class SelectFacetAction(
+        private val onSelect: () -> Unit,
+    ) : AnAction(ApiHelperBundle.message("toolwindow.filter.select")) {
+        override fun actionPerformed(e: AnActionEvent) {
+            onSelect()
+        }
+    }
+
     private inner class PairingFilterToggleAction(
         text: String,
         private val filter: EndpointPairingFilter,
@@ -540,6 +674,125 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
             }
         }
     }
+
+    private fun applyFacetFilters() {
+        when {
+            selectedTypes == setOf(EndpointTypeFilter.SERVER) || selectedFrameworks == setOf(EndpointKind.CONTROLLER) -> {
+                selectInterfaceTab(CARD_CONTROLLER)
+            }
+            selectedTypes == setOf(EndpointTypeFilter.CLIENT) ||
+                    (selectedFrameworks.isNotEmpty() && EndpointKind.CONTROLLER !in selectedFrameworks) -> {
+                selectInterfaceTab(CARD_FEIGN)
+            }
+        }
+        controllerTree.setFacetFilters(selectedModules, selectedTypes, selectedFrameworks)
+        feignTree.setFacetFilters(selectedModules, selectedTypes, selectedFrameworks)
+        updateIdeTabCounts(0, 0)
+        updateSearchBadge()
+    }
+
+    private fun updateModuleFilterActions() {
+        val modules = (controllerTree.getAvailableModules() + feignTree.getAvailableModules()).distinct().sorted()
+        val selectedModulesChanged = selectedModules.any { it !in modules }
+        if (selectedModulesChanged) selectedModules = selectedModules.intersect(modules.toSet())
+
+        moduleFilterGroup.removeAll()
+        moduleFilterGroup.add(FacetFilterToggleAction(
+            ApiHelperBundle.message("toolwindow.filter.all"),
+            { selectedModules.isEmpty() },
+        ) { selectedModules = emptySet(); applyFacetFilters() })
+        moduleFilterGroup.add(SelectFacetAction { showModuleSelection() })
+        moduleFilterGroup.addSeparator()
+        for (moduleName in modules) {
+            moduleFilterGroup.add(FacetFilterToggleAction(
+                moduleName,
+                { selectedModules == setOf(moduleName) },
+            ) { selectedModules = setOf(moduleName); applyFacetFilters() })
+        }
+        if (selectedModulesChanged) applyFacetFilters()
+    }
+
+    private fun showModuleSelection() {
+        val anchor = filterButtons[moduleFilterGroup] ?: return
+        val modules = (controllerTree.getAvailableModules() + feignTree.getAvailableModules()).distinct().sorted()
+        showFacetSelectionPopup(
+            ApiHelperBundle.message("toolwindow.filter.select.module"),
+            anchor,
+            modules,
+            selectedModules,
+            { it },
+        ) {
+            selectedModules = it
+            applyFacetFilters()
+        }
+    }
+
+    private fun showTypeSelection() {
+        val anchor = filterButtons[typeFilterGroup] ?: return
+        showFacetSelectionPopup(
+            ApiHelperBundle.message("toolwindow.filter.select.type"),
+            anchor,
+            EndpointTypeFilter.entries,
+            selectedTypes,
+            ::typeDisplayName,
+        ) {
+            selectedTypes = it
+            applyFacetFilters()
+        }
+    }
+
+    private fun showFrameworkSelection() {
+        val anchor = filterButtons[frameworkFilterGroup] ?: return
+        showFacetSelectionPopup(
+            ApiHelperBundle.message("toolwindow.filter.select.framework"),
+            anchor,
+            EndpointKind.entries,
+            selectedFrameworks,
+            ::frameworkDisplayName,
+        ) {
+            selectedFrameworks = it
+            applyFacetFilters()
+        }
+    }
+
+    private fun <T> showFacetSelectionPopup(
+        title: String,
+        anchor: JButton,
+        values: List<T>,
+        selected: Set<T>,
+        displayName: (T) -> String,
+        onSelected: (Set<T>) -> Unit,
+    ) {
+        val content = JPanel()
+        content.layout = BoxLayout(content, BoxLayout.Y_AXIS)
+        val checkBoxes = values.map { JBCheckBox(displayName(it), it in selected) }
+        for (checkBox in checkBoxes) {
+            checkBox.addActionListener {
+                onSelected(values.filterIndexed { index, _ -> checkBoxes[index].isSelected }.toSet())
+            }
+            content.add(checkBox)
+        }
+        val scrollPane = JBScrollPane(content)
+        JBPopupFactory.getInstance()
+            .createComponentPopupBuilder(scrollPane, checkBoxes.firstOrNull() ?: content)
+            .setTitle(title)
+            .createPopup()
+            .showUnderneathOf(anchor)
+    }
+
+    private fun typeDisplayName(type: EndpointTypeFilter): String = when (type) {
+        EndpointTypeFilter.CLIENT -> ApiHelperBundle.message("toolwindow.filter.type.client")
+        EndpointTypeFilter.SERVER -> ApiHelperBundle.message("toolwindow.filter.type.server")
+    }
+
+    private fun frameworkDisplayName(kind: EndpointKind): String = when (kind) {
+        EndpointKind.CONTROLLER -> ApiHelperBundle.message("toolwindow.filter.framework.spring.mvc")
+        EndpointKind.FEIGN -> ApiHelperBundle.message("toolwindow.filter.framework.openfeign")
+        EndpointKind.HTTP_EXCHANGE -> ApiHelperBundle.message("toolwindow.filter.framework.http.exchange")
+    }
+
+    private fun hasActiveFacetFilters(): Boolean =
+        selectedModules.isNotEmpty() || selectedTypes.isNotEmpty() || selectedFrameworks.isNotEmpty()
 
     private fun applyPairingFilter(filter: EndpointPairingFilter) {
         currentPairingFilter = filter

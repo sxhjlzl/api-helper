@@ -30,8 +30,7 @@
 | :--- | :--- |
 | **双向源码导航** | `@RestController` 与 `@FeignClient` / `@HttpExchange` 方法间 Gutter 图标一键互跳，容忍路径变量异名，支持组合元注解。 |
 | **全局接口搜索** | `Ctrl + Alt + \`（macOS `Cmd + Opt + \`）唤起多关键词搜索，`Enter` 跳源码、`Shift + Enter` 跳对端、`Ctrl/Cmd + Enter` 直接调试。 |
-| **六合一工作区** | **`接口`**、**`体检`**、**`调试`**、**`前置 URL`**、**`请求历史`**、**`全局参数`** 六大原生标签页，各自拥有完整窗口高度。 |
-| **接口契约体检** | 自动比对两端参数名、路径变量与重复映射，把上线后才暴露的 400 / 404 提前到编辑器波浪线，支持一键修复与 Markdown 报告导出。 |
+| **五合一工作区** | **`接口`**、**`调试`**、**`前置 URL`**、**`请求历史`**、**`全局参数`** 五大原生标签页，各自拥有完整窗口高度。 |
 | **反向调用方查询** | Controller 方法右键「查看调用方」，列出所有调用它的 Feign 客户端——IDE 原生 Find Usages 覆盖不到的能力。 |
 | **智能 API 调试** | 自动预填参数并递归展开嵌套 DTO 生成 JSON 草稿，支持多环境切换、草稿记忆与 30 条历史回放；`{{变量}}` 插值与认证预设打通登录鉴权链路。 |
 | **cURL / 文档 / OpenAPI** | 一键导出 cURL 命令、Markdown 接口文档与 OpenAPI 3.0 JSON，并支持从剪贴板导入 cURL 回填调试器。 |
@@ -94,13 +93,12 @@ src/main/kotlin/com/lizhuolun/apihelper/
 ├── ApiHelperBundle.kt        # 中英双语国际化资源入口
 ├── cache/                    # 双边映射快照倒排索引缓存与 SmartPointer 缓存
 ├── config/                   # Spring 配置读取、profile 推断与占位符解析
-├── core/                     # HTTP 映射模型、路径规范化、注解解析与契约体检
-├── inspection/               # 契约一致性编辑器实时检查与 QuickFix
+├── core/                     # HTTP 映射模型、路径规范化与注解解析
 ├── listener/                 # 启动异步预热与 PSI 增量防抖监听
 ├── provider/                 # 图标资源与 Java/Kotlin 双向 LineMarker
 ├── scanner/                  # 基于 AnnotatedElementsSearch 的全工程端点扫描
 ├── settings/                 # 全局持久化配置与 Settings 页面
-└── ui/                       # 多标签页工具窗口、接口树、搜索弹窗、体检报告与调试面板
+└── ui/                       # 多标签页工具窗口、接口树、搜索弹窗与调试面板
 ```
 
 </details>

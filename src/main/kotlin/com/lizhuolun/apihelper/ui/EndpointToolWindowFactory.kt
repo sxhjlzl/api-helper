@@ -8,7 +8,6 @@ import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.content.ContentManagerEvent
 import com.intellij.ui.content.ContentManagerListener
 import com.lizhuolun.apihelper.ApiHelperBundle
-import com.lizhuolun.apihelper.ui.contract.ContractReportPanel
 import com.lizhuolun.apihelper.ui.debug.EndpointDebugPanel
 import com.lizhuolun.apihelper.ui.debug.EnvironmentManagePanel
 import com.lizhuolun.apihelper.ui.debug.GlobalParamsPanel
@@ -33,7 +32,6 @@ class EndpointToolWindowFactory : ToolWindowFactory {
         configureToolWindowPlacement(toolWindow)
 
         val mainPanel = EndpointToolWindowPanel(project)
-        val contractPanel = ContractReportPanel(project)
         val debugPanel = EndpointDebugPanel(project)
         val envPanel = EnvironmentManagePanel(project)
         val globalParamsPanel = GlobalParamsPanel()
@@ -43,14 +41,6 @@ class EndpointToolWindowFactory : ToolWindowFactory {
         val mainContent = contentFactory.createContent(
             mainPanel,
             ApiHelperBundle.message("toolwindow.nav.interfaces"),
-            false,
-        ).apply {
-            isCloseable = false
-        }
-
-        val contractContent = contentFactory.createContent(
-            contractPanel,
-            ApiHelperBundle.message("toolwindow.tab.contract"),
             false,
         ).apply {
             isCloseable = false
@@ -103,7 +93,6 @@ class EndpointToolWindowFactory : ToolWindowFactory {
 
         val contentManager = toolWindow.contentManager
         contentManager.addContent(mainContent)
-        contentManager.addContent(contractContent)
         contentManager.addContent(debugContent)
         contentManager.addContent(envContent)
         contentManager.addContent(historyContent)
@@ -112,7 +101,6 @@ class EndpointToolWindowFactory : ToolWindowFactory {
         contentManager.addContentManagerListener(object : ContentManagerListener {
             override fun selectionChanged(event: ContentManagerEvent) {
                 when (event.content) {
-                    contractContent -> contractPanel.refresh()
                     debugContent -> debugPanel.reloadEnvironments()
                     envContent -> envPanel.loadFromSettings()
                     historyContent -> historyPanel.refreshHistory()
