@@ -58,6 +58,27 @@ object PathBuilder {
     fun normalizeForMatch(url: String): String = PATH_VARIABLE_REGEX.replace(url, "{}")
 
     /**
+     * 移除客户端 URL 中配置的公共网关前缀，仅用于两端配对。
+     * 多个前缀同时命中时使用最长前缀，且必须落在完整路径段边界上。
+     *
+     * @param url 客户端原始相对路径
+     * @param prefixes 配置的公共前缀列表
+     * @return 用于与 Controller 配对的规范化路径
+     */
+    fun normalizeClientForMatch(url: String, prefixes: List<String>): String {
+        val normalized = normalizeForMatch(url)
+        val matched = prefixes.asSequence()
+            .map(::normalize)
+            .filter { it.isNotEmpty() && it != "/" }
+            .distinct()
+            .sortedByDescending { it.length }
+            .firstOrNull { normalized == it || normalized.startsWith("$it/") }
+            ?: return normalized
+        val stripped = normalized.removePrefix(matched)
+        return if (stripped.isEmpty()) "/" else stripped
+    }
+
+    /**
      * Controller 端拼装完整 URL。
      */
     fun buildControllerUrl(

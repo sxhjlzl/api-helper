@@ -5,6 +5,7 @@ import com.intellij.openapi.util.Computable
 import com.intellij.psi.PsiJavaFile
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.lizhuolun.apihelper.scanner.EndpointScanner
+import com.lizhuolun.apihelper.settings.ApiHelperSettings
 
 class BilateralMappingCacheServiceTest : BasePlatformTestCase() {
 
@@ -387,6 +388,59 @@ class BilateralMappingCacheServiceTest : BasePlatformTestCase() {
         assertTrue(cache.hasControllerCounterpart(feignMethod))
     }
 
+    fun testFeignClientMatchesControllerAfterStrippingConfiguredPrefix() {
+        addSpringAnnotations()
+        val settings = ApiHelperSettings.getInstance()
+        val originalPrefixes = settings.state.clientPathPrefixesText
+        settings.state.clientPathPrefixesText = "/rpc-api"
+        try {
+            myFixture.configureByText(
+                "OAuth2TokenController.java",
+                """
+                    package example;
+
+                    import org.springframework.web.bind.annotation.PostMapping;
+                    import org.springframework.web.bind.annotation.RestController;
+
+                    @RestController
+                    class OAuth2TokenController {
+                        @PostMapping("/system/oauth2/token/create")
+                        String create() {
+                            return "ok";
+                        }
+                    }
+                """.trimIndent(),
+            )
+            val feignFile = myFixture.configureByText(
+                "OAuth2TokenApi.java",
+                """
+                    package example;
+
+                    import org.springframework.cloud.openfeign.FeignClient;
+                    import org.springframework.web.bind.annotation.PostMapping;
+
+                    @FeignClient(name = "system")
+                    interface OAuth2TokenApi {
+                        @PostMapping("/rpc-api/system/oauth2/token/create")
+                        String create();
+                    }
+                """.trimIndent(),
+            ) as PsiJavaFile
+
+            val clientEndpoint = EndpointScanner.scanClientEndpoints(project).single()
+            assertEquals("/rpc-api/system/oauth2/token/create", clientEndpoint.url)
+            assertEquals("/system/oauth2/token/create", clientEndpoint.matchUrl)
+
+            val cache = BilateralMappingCacheService.of(project)
+            cache.clear()
+            cache.replaceController(EndpointScanner.scanControllerEndpoints(project, null))
+            val feignMethod = feignFile.classes.single().methods.single()
+            assertTrue(cache.hasControllerCounterpart(feignMethod))
+        } finally {
+            settings.state.clientPathPrefixesText = originalPrefixes
+        }
+    }
+
     private fun addSpringAnnotations() {
         myFixture.addFileToProject(
             "org/springframework/web/bind/annotation/RestController.java",
@@ -415,6 +469,17 @@ class BilateralMappingCacheServiceTest : BasePlatformTestCase() {
                 public @interface FeignClient {
                     String name() default "";
                     String path() default "";
+                }
+            """.trimIndent(),
+        )
+        myFixture.addFileToProject(
+            "org/springframework/web/bind/annotation/PostMapping.java",
+            """
+                package org.springframework.web.bind.annotation;
+
+                public @interface PostMapping {
+                    String[] value() default {};
+                    String[] path() default {};
                 }
             """.trimIndent(),
         )

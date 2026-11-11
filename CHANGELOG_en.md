@@ -2,6 +2,22 @@
 
 All notable changes to the ApiHelper plugin are documented in this file. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.5] - 2026-11-11
+
+### Added
+
+- Added configurable public path prefixes (such as `/rpc-api`) for Feign / HttpExchange clients. Gateway prefixes are stripped only for endpoint matching, leaving original URLs, debugging, and exports unchanged.
+
+### Improved
+
+- Consolidated type filtering into HTTP Server / HTTP Client tabs driven by `SERVER` / `CLIENT`; only Module and Framework filters remain in the top bar.
+- Standardized pairing-filter wording to “unpaired endpoints”.
+
+### Fixed
+
+- Fixed the Feign list staying empty after adding or clearing client path prefixes; changes now trigger a forced endpoint refresh.
+- Replaced the deprecated `FileEditorManager.openFile(VirtualFile, boolean)` call to reduce binary and source compatibility risks in future IDE releases.
+
 ## [1.2.4] - 2026-11-10
 
 ### Added
@@ -57,7 +73,7 @@ All notable changes to the ApiHelper plugin are documented in this file. Version
 - **Quick fix**: when parameter names differ, a single Alt+Enter rewrites the Feign annotation value to the name the server expects (annotation only, never the method signature).
 - **Reverse caller lookup**: right-click a Controller method and choose **`Show Callers`** to list every Feign / HttpExchange client calling it, with module, path, and HTTP method, and jump to any of them. Native Find Usages cannot see HTTP-level call relationships.
 - **P0 rule set**:
-  - client endpoints with no matching Controller in the project (orphans);
+  - client endpoints with no matching Controller in the project (unpaired);
   - mismatched explicit `@RequestParam` names between the two sides, the most common cause of production 400s;
   - path variables declared in the URL template with no matching `@PathVariable` parameter;
   - two Controllers mapped to the same path and HTTP method, which fails application startup.
@@ -94,7 +110,7 @@ All notable changes to the ApiHelper plugin are documented in this file. Version
 - **Global Common Headers & Multi-Environment Base URLs**: Configure global common request headers (e.g. `Authorization`, `X-Tenant-Id`) and environment Base URLs (e.g. `Local`, `Dev`, `Test`) under Settings → Tools → ApiHelper or the dedicated tool window tabs, with a quick environment switcher in the API debugger.
 - **Copy as cURL Everywhere & Gutter Copy API Docs**: Export standard `curl` commands from the endpoint tree context menu, Controller editor gutter menu, and the API debugger toolbar; also added "Copy API Docs" directly to the Controller gutter context menu.
 - **Debug Request History & Per-Endpoint Draft Persistence**: Record up to 30 recent debug requests and responses in the current project session for one-click replay, alongside automatic per-endpoint draft persistence and a "Reset" button.
-- **Group by Module & Pairing Status Filter**: Toggle `Module → Class` grouping, filter endpoints by pairing status (`All Endpoints` / `Paired Only` / `Unpaired (Orphan) Only`), and view pairing indicator icons directly on endpoint tree nodes.
+- **Group by Module & Pairing Status Filter**: Toggle `Module → Class` grouping, filter endpoints by pairing status (`All Endpoints` / `Paired Only` / `Unpaired Endpoints Only`), and view pairing indicator icons directly on endpoint tree nodes.
 - **Select Opened Endpoint**: Added a toolbar action to locate and select the endpoint corresponding to the current editor caret position.
 - **Recursive Nested JSON Drafts, Annotation Examples & Composite Meta-Annotations**: Expand nested DTOs and collections (`List<T>`) into formatted JSON request bodies, honoring `@JsonProperty` / `@SerializedName` / `@JSONField` field names and `@Schema(example)` / `@ApiModelProperty(example)` / `@Parameter(example)` values, and recognize custom composite Spring meta-annotations (e.g. `@ApiV1RestController` annotated with `@RestController` and `@RequestMapping`).
 

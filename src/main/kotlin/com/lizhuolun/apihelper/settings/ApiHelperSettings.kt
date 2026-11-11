@@ -35,6 +35,11 @@ class ApiHelperSettings : PersistentStateComponent<ApiHelperSettings.SettingsSta
         var manualActiveProfile: String = ""
 
         /**
+         * 客户端公共路径前缀，逗号或换行分隔；仅在 Feign / HttpExchange 与 Controller 配对时裁剪。
+         **/
+        var clientPathPrefixesText: String = ""
+
+        /**
          * 调试请求的连接超时，单位秒；范围 1-300，越界时由读取方自行夹取
          **/
         var connectTimeoutSeconds: Int = 30
@@ -216,6 +221,19 @@ class ApiHelperSettings : PersistentStateComponent<ApiHelperSettings.SettingsSta
                 }
             }
             .distinctBy { it.name }
+            .toList()
+
+    /**
+     * 解析客户端公共路径前缀，支持逗号或换行分隔。
+     *
+     * @return 去重后的非空前缀列表
+     */
+    fun parseClientPathPrefixes(): List<String> =
+        internalState.clientPathPrefixesText
+            .split(',', '\n', '\r')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
             .toList()
 
     private var internalState: SettingsState = SettingsState()

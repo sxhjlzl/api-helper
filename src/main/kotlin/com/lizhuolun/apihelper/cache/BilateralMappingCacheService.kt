@@ -401,6 +401,14 @@ class BilateralMappingCacheService(
     }
 
     /**
+     * 清空客户端缓存，用于公共路径前缀变更后触发重新扫描。
+     */
+    fun clearClient() {
+        clientSide = SideSnapshot.EMPTY
+        version.incrementAndGet()
+    }
+
+    /**
      * 清空缓存，通常仅在测试或异常恢复路径调用。
      */
     fun clear() {

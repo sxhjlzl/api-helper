@@ -77,10 +77,12 @@ class EndpointToolWindowService(private val project: Project) {
 
     /**
      * 触发工具窗口刷新；若面板尚未创建则静默忽略。
+     *
+     * @param forceScan 是否忽略加载标记并强制全量扫描
      */
-    fun refresh() {
+    fun refresh(forceScan: Boolean = false) {
         if (project.isDisposed) return
-        panel?.refresh()
+        panel?.refresh(forceScan)
     }
 
     /**

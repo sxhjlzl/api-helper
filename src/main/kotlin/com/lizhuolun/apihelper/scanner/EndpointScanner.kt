@@ -17,6 +17,7 @@ import com.lizhuolun.apihelper.core.HttpMappingInfo
 import com.lizhuolun.apihelper.core.annotation.AnnotationParser
 import com.lizhuolun.apihelper.core.annotation.PathBuilder
 import com.lizhuolun.apihelper.core.annotation.SpringAnnotations
+import com.lizhuolun.apihelper.settings.ApiHelperSettings
 
 /**
  * 端点扫描器：在工程中查找所有 FeignClient / HttpExchange / RestController，
@@ -105,6 +106,7 @@ object EndpointScanner {
         kind: EndpointKind,
     ): List<HttpMappingInfo> = computeInReadAction {
         val classPath = AnnotationParser.extractClassLevelPath(psiClass)
+        val clientPathPrefixes = ApiHelperSettings.getInstance().parseClientPathPrefixes()
         val mappings = ArrayList<HttpMappingInfo>(psiClass.methods.size)
         for (method in psiClass.methods) {
             val annotation = AnnotationParser.findRestfulAnnotation(method) ?: continue
@@ -116,7 +118,7 @@ object EndpointScanner {
                 httpMethod = httpMethod,
                 method = method,
                 kind = kind,
-                matchUrl = PathBuilder.normalizeForMatch(relativeUrl),
+                matchUrl = PathBuilder.normalizeClientForMatch(relativeUrl, clientPathPrefixes),
             )
         }
         mappings
