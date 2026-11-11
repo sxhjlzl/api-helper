@@ -9,25 +9,21 @@ import org.junit.Test
 class EndpointTreeFacetFilterTest {
 
     @Test
-    fun `module type and framework filters can be combined`() {
+    fun `module and framework filters can be combined`() {
         val item = item(moduleName = "promotion-api", kind = EndpointKind.FEIGN)
 
-        assertTrue(matches(item, setOf("promotion-api"), emptySet(), emptySet()))
-        assertFalse(matches(item, setOf("promotion-server"), emptySet(), emptySet()))
-        assertTrue(matches(item, emptySet(), setOf(EndpointTypeFilter.CLIENT), emptySet()))
-        assertFalse(matches(item, emptySet(), setOf(EndpointTypeFilter.SERVER), emptySet()))
-        assertTrue(matches(item, emptySet(), emptySet(), setOf(EndpointKind.FEIGN)))
-        assertFalse(matches(item, emptySet(), emptySet(), setOf(EndpointKind.HTTP_EXCHANGE)))
+        assertTrue(matches(item, setOf("promotion-api"), emptySet()))
+        assertFalse(matches(item, setOf("promotion-server"), emptySet()))
+        assertTrue(matches(item, emptySet(), setOf(EndpointKind.FEIGN)))
+        assertFalse(matches(item, emptySet(), setOf(EndpointKind.HTTP_EXCHANGE)))
         assertTrue(matches(
             item,
             setOf("promotion-api", "promotion-server"),
-            setOf(EndpointTypeFilter.CLIENT, EndpointTypeFilter.SERVER),
             setOf(EndpointKind.FEIGN, EndpointKind.CONTROLLER),
         ))
         assertFalse(matches(
             item,
             setOf("promotion-server"),
-            setOf(EndpointTypeFilter.CLIENT),
             setOf(EndpointKind.FEIGN),
         ))
     }
@@ -36,20 +32,14 @@ class EndpointTreeFacetFilterTest {
     fun `blank module uses default module filter`() {
         val item = item(moduleName = "", kind = EndpointKind.CONTROLLER)
 
-        assertTrue(matches(
-            item,
-            setOf("default"),
-            setOf(EndpointTypeFilter.SERVER),
-            setOf(EndpointKind.CONTROLLER),
-        ))
+        assertTrue(matches(item, setOf("default"), setOf(EndpointKind.CONTROLLER)))
     }
 
     private fun matches(
         item: EndpointTreeItem,
         moduleNames: Set<String>,
-        types: Set<EndpointTypeFilter>,
         frameworks: Set<EndpointKind>,
-    ): Boolean = EndpointTree.matchesFacetFilters(item, moduleNames, types, frameworks)
+    ): Boolean = EndpointTree.matchesFacetFilters(item, moduleNames, frameworks)
 
     private fun item(moduleName: String, kind: EndpointKind): EndpointTreeItem =
         EndpointTreeItem(

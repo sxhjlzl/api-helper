@@ -37,4 +37,37 @@ class PathBuilderTest {
     fun `normalizeForMatch keeps plain path unchanged`() {
         assertEquals("/api/hello", PathBuilder.normalizeForMatch("/api/hello"))
     }
+
+    @Test
+    fun `client prefix is stripped only for matching`() {
+        assertEquals(
+            "/system/oauth2/token/create",
+            PathBuilder.normalizeClientForMatch(
+                "/rpc-api/system/oauth2/token/create",
+                listOf("/rpc-api"),
+            ),
+        )
+    }
+
+    @Test
+    fun `client prefix matching uses longest prefix and path segment boundary`() {
+        assertEquals(
+            "/oauth2/token/create",
+            PathBuilder.normalizeClientForMatch(
+                "/rpc-api/system/oauth2/token/create",
+                listOf("/rpc-api", "/rpc-api/system"),
+            ),
+        )
+        assertEquals(
+            "/rpc-api-other/system/oauth2/token/create",
+            PathBuilder.normalizeClientForMatch(
+                "/rpc-api-other/system/oauth2/token/create",
+                listOf("/rpc-api"),
+            ),
+        )
+        assertEquals(
+            "/system/oauth2/token/create",
+            PathBuilder.normalizeClientForMatch("/system/oauth2/token/create", emptyList()),
+        )
+    }
 }

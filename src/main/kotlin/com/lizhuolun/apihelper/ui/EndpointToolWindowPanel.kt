@@ -118,7 +118,6 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
 
     private val ideTabButtons = mutableListOf<JLabel>()
     private val moduleFilterGroup = DefaultActionGroup(ApiHelperBundle.message("toolwindow.filter.module"), true)
-    private val typeFilterGroup = DefaultActionGroup(ApiHelperBundle.message("toolwindow.filter.type"), true)
     private val frameworkFilterGroup = DefaultActionGroup(ApiHelperBundle.message("toolwindow.filter.framework"), true)
     private val filterButtons = mutableMapOf<DefaultActionGroup, JButton>()
     private val toolbarComponent = buildToolbar()
@@ -140,10 +139,9 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
     private var isSearchVisible: Boolean = false
     private var isGroupByModule: Boolean = false
     private var selectedModules: Set<String> = emptySet()
-    private var selectedTypes: Set<EndpointTypeFilter> = emptySet()
     private var selectedFrameworks: Set<EndpointKind> = emptySet()
     private var currentPairingFilter: EndpointPairingFilter = EndpointPairingFilter.ALL
-    private var activeInterfaceTab: String = CARD_CONTROLLER
+    private var activeEndpointType: EndpointTypeFilter = EndpointTypeFilter.SERVER
     private var controllerEndpointsLoaded: Boolean = false
     private var clientEndpointsLoaded: Boolean = false
 
@@ -341,19 +339,6 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         moduleFilterGroup.add(SelectFacetAction { showModuleSelection() })
         moduleFilterGroup.addSeparator()
 
-        typeFilterGroup.add(FacetFilterToggleAction(
-            ApiHelperBundle.message("toolwindow.filter.all"),
-            { selectedTypes.isEmpty() },
-        ) { selectedTypes = emptySet(); applyFacetFilters() })
-        typeFilterGroup.add(SelectFacetAction { showTypeSelection() })
-        typeFilterGroup.addSeparator()
-        EndpointTypeFilter.entries.forEach { type ->
-            typeFilterGroup.add(FacetFilterToggleAction(
-                typeDisplayName(type),
-                { selectedTypes == setOf(type) },
-            ) { selectedTypes = setOf(type); applyFacetFilters() })
-        }
-
         frameworkFilterGroup.add(FacetFilterToggleAction(
             ApiHelperBundle.message("toolwindow.filter.all"),
             { selectedFrameworks.isEmpty() },
@@ -370,7 +355,6 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         val buttons = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
             isOpaque = false
             add(filterPopupButton(moduleFilterGroup))
-            add(filterPopupButton(typeFilterGroup))
             add(filterPopupButton(frameworkFilterGroup))
         }
         return JPanel(BorderLayout()).apply {
@@ -389,8 +373,8 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         ideTabButtons.clear()
         val tabsBox = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(2), 0)).apply {
             isOpaque = false
-            add(ideTabButton(ApiHelperBundle.message("toolwindow.tab.controller"), CARD_CONTROLLER))
-            add(ideTabButton(ApiHelperBundle.message("toolwindow.tab.feign"), CARD_FEIGN))
+            add(ideTabButton(ApiHelperBundle.message("toolwindow.filter.type.server"), CARD_CONTROLLER))
+            add(ideTabButton(ApiHelperBundle.message("toolwindow.filter.type.client"), CARD_FEIGN))
         }
 
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0)).apply {
@@ -430,7 +414,7 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
     }
 
     private fun selectInterfaceTab(card: String) {
-        activeInterfaceTab = card
+        activeEndpointType = if (card == CARD_CONTROLLER) EndpointTypeFilter.SERVER else EndpointTypeFilter.CLIENT
         interfaceCardLayout.show(interfaceContentPanel, card)
         ideTabButtons.forEach { btn ->
             val btnCard = btn.getClientProperty(KEY_CARD) as? String
@@ -467,10 +451,10 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
     }
 
     private fun controllerTabTitle(total: Int, filtered: Int): String =
-        formatTabTitle(ApiHelperBundle.message("toolwindow.tab.controller"), total, filtered)
+        formatTabTitle(ApiHelperBundle.message("toolwindow.filter.type.server"), total, filtered)
 
     private fun feignTabTitle(total: Int, filtered: Int): String =
-        formatTabTitle(ApiHelperBundle.message("toolwindow.tab.feign"), total, filtered)
+        formatTabTitle(ApiHelperBundle.message("toolwindow.filter.type.client"), total, filtered)
 
     private fun formatTabTitle(baseTitle: String, total: Int, filtered: Int): String {
         val hasFilter = searchField.text.isNotBlank() ||
@@ -499,7 +483,6 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
             searchField.text = ""
             applyPairingFilter(EndpointPairingFilter.ALL)
             selectedModules = emptySet()
-            selectedTypes = emptySet()
             selectedFrameworks = emptySet()
             applyFacetFilters()
             if (trySelectMethodInTrees(method)) {
@@ -573,7 +556,7 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
         headerPanel.repaint()
     }
 
-    private fun activeTree(): EndpointTree = if (activeInterfaceTab == CARD_CONTROLLER) controllerTree else feignTree
+    private fun activeTree(): EndpointTree = if (activeEndpointType == EndpointTypeFilter.SERVER) controllerTree else feignTree
 
     private fun updateSearchBadge() {
         val text = searchField.text.trim()
@@ -677,16 +660,13 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
 
     private fun applyFacetFilters() {
         when {
-            selectedTypes == setOf(EndpointTypeFilter.SERVER) || selectedFrameworks == setOf(EndpointKind.CONTROLLER) -> {
-                selectInterfaceTab(CARD_CONTROLLER)
-            }
-            selectedTypes == setOf(EndpointTypeFilter.CLIENT) ||
-                    (selectedFrameworks.isNotEmpty() && EndpointKind.CONTROLLER !in selectedFrameworks) -> {
+            selectedFrameworks == setOf(EndpointKind.CONTROLLER) -> selectInterfaceTab(CARD_CONTROLLER)
+            selectedFrameworks.isNotEmpty() && EndpointKind.CONTROLLER !in selectedFrameworks -> {
                 selectInterfaceTab(CARD_FEIGN)
             }
         }
-        controllerTree.setFacetFilters(selectedModules, selectedTypes, selectedFrameworks)
-        feignTree.setFacetFilters(selectedModules, selectedTypes, selectedFrameworks)
+        controllerTree.setFacetFilters(selectedModules, selectedFrameworks)
+        feignTree.setFacetFilters(selectedModules, selectedFrameworks)
         updateIdeTabCounts(0, 0)
         updateSearchBadge()
     }
@@ -723,20 +703,6 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
             { it },
         ) {
             selectedModules = it
-            applyFacetFilters()
-        }
-    }
-
-    private fun showTypeSelection() {
-        val anchor = filterButtons[typeFilterGroup] ?: return
-        showFacetSelectionPopup(
-            ApiHelperBundle.message("toolwindow.filter.select.type"),
-            anchor,
-            EndpointTypeFilter.entries,
-            selectedTypes,
-            ::typeDisplayName,
-        ) {
-            selectedTypes = it
             applyFacetFilters()
         }
     }
@@ -780,11 +746,6 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
             .showUnderneathOf(anchor)
     }
 
-    private fun typeDisplayName(type: EndpointTypeFilter): String = when (type) {
-        EndpointTypeFilter.CLIENT -> ApiHelperBundle.message("toolwindow.filter.type.client")
-        EndpointTypeFilter.SERVER -> ApiHelperBundle.message("toolwindow.filter.type.server")
-    }
-
     private fun frameworkDisplayName(kind: EndpointKind): String = when (kind) {
         EndpointKind.CONTROLLER -> ApiHelperBundle.message("toolwindow.filter.framework.spring.mvc")
         EndpointKind.FEIGN -> ApiHelperBundle.message("toolwindow.filter.framework.openfeign")
@@ -792,7 +753,7 @@ class EndpointToolWindowPanel(private val project: Project) : JBPanel<EndpointTo
     }
 
     private fun hasActiveFacetFilters(): Boolean =
-        selectedModules.isNotEmpty() || selectedTypes.isNotEmpty() || selectedFrameworks.isNotEmpty()
+        selectedModules.isNotEmpty() || selectedFrameworks.isNotEmpty()
 
     private fun applyPairingFilter(filter: EndpointPairingFilter) {
         currentPairingFilter = filter

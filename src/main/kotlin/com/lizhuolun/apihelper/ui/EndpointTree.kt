@@ -89,7 +89,6 @@ class EndpointTree(
     private var groupByModule: Boolean = false
 
     private var moduleFilters: Set<String> = emptySet()
-    private var typeFilters: Set<EndpointTypeFilter> = emptySet()
     private var frameworkFilters: Set<EndpointKind> = emptySet()
 
     /**
@@ -172,20 +171,14 @@ class EndpointTree(
     }
 
     /**
-     * 设置模块、端点类型与框架筛选条件，空集合表示全部。
+     * 设置模块与框架筛选条件，空集合表示全部。
      *
      * @param moduleNames 模块名集合
-     * @param types 端点类型集合
      * @param frameworks 框架集合
      */
-    fun setFacetFilters(
-        moduleNames: Set<String>,
-        types: Set<EndpointTypeFilter>,
-        frameworks: Set<EndpointKind>,
-    ) {
-        if (moduleFilters == moduleNames && typeFilters == types && frameworkFilters == frameworks) return
+    fun setFacetFilters(moduleNames: Set<String>, frameworks: Set<EndpointKind>) {
+        if (moduleFilters == moduleNames && frameworkFilters == frameworks) return
         moduleFilters = moduleNames
-        typeFilters = types
         frameworkFilters = frameworks
         rebuildFilteredTree()
     }
@@ -206,7 +199,7 @@ class EndpointTree(
         val query = EndpointSearchQuery.parse(currentFilterText)
         val filtered = allItems.filter { item ->
             val matchesQuery = query.isBlank || query.matches(item)
-            val matchesFacets = matchesFacetFilters(item, moduleFilters, typeFilters, frameworkFilters)
+            val matchesFacets = matchesFacetFilters(item, moduleFilters, frameworkFilters)
             val matchesPairing = when (pairingFilter) {
                 EndpointPairingFilter.ALL -> true
                 EndpointPairingFilter.PAIRED_ONLY -> item.hasCounterpart
@@ -500,7 +493,7 @@ class EndpointTree(
                 ApplicationManager.getApplication().runWriteAction {
                     VfsUtil.saveText(scratchFile, requestText)
                 }
-                FileEditorManager.getInstance(project).openFile(scratchFile, true)
+                FileEditorManager.getInstance(project).openFile(scratchFile, true, false)
             }
         }
     }
@@ -618,18 +611,11 @@ class EndpointTree(
         internal fun matchesFacetFilters(
             item: EndpointTreeItem,
             moduleNames: Set<String>,
-            types: Set<EndpointTypeFilter>,
             frameworks: Set<EndpointKind>,
         ): Boolean {
             val matchesModule = moduleNames.isEmpty() || item.moduleName.ifBlank { "default" } in moduleNames
-            val itemType = if (item.kind == EndpointKind.CONTROLLER) {
-                EndpointTypeFilter.SERVER
-            } else {
-                EndpointTypeFilter.CLIENT
-            }
-            val matchesType = types.isEmpty() || itemType in types
             val matchesFramework = frameworks.isEmpty() || item.kind in frameworks
-            return matchesModule && matchesType && matchesFramework
+            return matchesModule && matchesFramework
         }
 
         private fun effectiveHttpMethod(item: EndpointTreeItem): String =
@@ -888,7 +874,7 @@ enum class EndpointPairingFilter {
     PAIRED_ONLY,
 
     /**
-     * 仅展示无对端匹配的孤儿端点
+     * 仅展示无对端匹配的未配对端点
      **/
     UNPAIRED_ONLY,
 }

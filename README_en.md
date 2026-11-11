@@ -50,7 +50,7 @@
 | **Search Any Endpoint** | `Ctrl + Alt + \` / `Cmd + Opt + \` | Multi-keyword search (e.g. `POST order`) to jump to source, counterpart, or debugger |
 | **Client ↔ Server Jump** | Click editor gutter icon | Left-click to jump; right-click Controller gutter to debug or copy |
 | **Export cURL / API Docs** | Controller gutter / Tree context menu | Copies a ready-to-run `curl` command or Markdown API docs |
-| **Find Orphan Endpoints** | Toolbar `Filter by Pairing Status` | Filters to `Unpaired (Orphan) Only` in one click |
+| **Find Unpaired Endpoints** | Toolbar `Filter by Pairing Status` | Filters to `Unpaired Endpoints Only` in one click |
 | **Switch Env & Global Token** | `Base URL` / `Global Params` tabs | Manage environment URLs and common headers in visual tables |
 | **Replay Debug History** | `History` tab / Debugger `History` button | Double-click to restore the request and response |
 

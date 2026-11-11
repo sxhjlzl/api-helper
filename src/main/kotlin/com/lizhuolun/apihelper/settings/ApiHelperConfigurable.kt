@@ -39,6 +39,11 @@ class ApiHelperConfigurable : Configurable {
         ApiHelperUiStyle.applyTextField(this)
     }
 
+    private val clientPathPrefixesTextField = JBTextField().apply {
+        emptyText.text = ApiHelperBundle.message("settings.client.path.prefixes.placeholder")
+        ApiHelperUiStyle.applyTextField(this)
+    }
+
     private val connectTimeoutSpinner = JBIntSpinner(CONNECT_TIMEOUT_DEFAULT, CONNECT_TIMEOUT_MIN, CONNECT_TIMEOUT_MAX)
     private val requestTimeoutSpinner = JBIntSpinner(REQUEST_TIMEOUT_DEFAULT, REQUEST_TIMEOUT_MIN, REQUEST_TIMEOUT_MAX)
 
@@ -76,6 +81,7 @@ class ApiHelperConfigurable : Configurable {
                 ApiHelperUiStyle.applyToolbarPillButton(this)
                 addActionListener {
                     profileTextField.text = ""
+                    clientPathPrefixesTextField.text = ""
                     connectTimeoutSpinner.number = CONNECT_TIMEOUT_DEFAULT
                     requestTimeoutSpinner.number = REQUEST_TIMEOUT_DEFAULT
                 }
@@ -84,6 +90,7 @@ class ApiHelperConfigurable : Configurable {
 
         val generalSection = FormBuilder.createFormBuilder()
             .addLabeledComponent(ApiHelperBundle.message("settings.active.profile.label"), profileTextField, 1, false)
+            .addLabeledComponent(ApiHelperBundle.message("settings.client.path.prefixes.label"), clientPathPrefixesTextField, 1, false)
             .addLabeledComponent(ApiHelperBundle.message("settings.connect.timeout.label"), timeoutRow, 1, false)
             .panel.apply {
                 border = IdeBorderFactory.createTitledBorder(ApiHelperBundle.message("settings.section.general"), false)
@@ -112,6 +119,7 @@ class ApiHelperConfigurable : Configurable {
     override fun isModified(): Boolean {
         val state = ApiHelperSettings.getInstance().state
         return profileTextField.text.trim() != state.manualActiveProfile ||
+            clientPathPrefixesTextField.text.trim() != state.clientPathPrefixesText.trim() ||
             connectTimeoutSpinner.number != state.connectTimeoutSeconds ||
             requestTimeoutSpinner.number != state.requestTimeoutSeconds ||
             envManagePanel.exportEnvironmentsText() != state.environmentsText.trim() ||
@@ -126,8 +134,11 @@ class ApiHelperConfigurable : Configurable {
     override fun apply() {
         val state = ApiHelperSettings.getInstance().state
         val newProfile = profileTextField.text.trim()
+        val newClientPathPrefixes = clientPathPrefixesTextField.text.trim()
         val profileChanged = state.manualActiveProfile != newProfile
+        val clientPathPrefixesChanged = state.clientPathPrefixesText.trim() != newClientPathPrefixes
         state.manualActiveProfile = newProfile
+        state.clientPathPrefixesText = newClientPathPrefixes
         state.connectTimeoutSeconds = connectTimeoutSpinner.number
         state.requestTimeoutSeconds = requestTimeoutSpinner.number
         envManagePanel.persistToSettings()
@@ -137,6 +148,10 @@ class ApiHelperConfigurable : Configurable {
             if (profileChanged) {
                 BilateralMappingCacheService.of(project).scheduleControllerRefresh(delayMillis = 0)
             }
+            if (clientPathPrefixesChanged) {
+                BilateralMappingCacheService.of(project).clearClient()
+                EndpointToolWindowService.of(project).refresh(forceScan = true)
+            }
             EndpointToolWindowService.of(project).reloadDebugEnvironments()
         }
     }
@@ -144,6 +159,7 @@ class ApiHelperConfigurable : Configurable {
     override fun reset() {
         val state = ApiHelperSettings.getInstance().state
         profileTextField.text = state.manualActiveProfile
+        clientPathPrefixesTextField.text = state.clientPathPrefixesText
         connectTimeoutSpinner.number = state.connectTimeoutSeconds
         requestTimeoutSpinner.number = state.requestTimeoutSeconds
         envManagePanel.loadFromSettings()

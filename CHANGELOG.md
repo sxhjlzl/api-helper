@@ -2,6 +2,22 @@
 
 本文件记录 ApiHelper 插件的版本变更。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.2.5] - 2026-11-11
+
+### 新增
+
+- 支持配置 Feign / HttpExchange 客户端公共路径前缀（如 `/rpc-api`），配对时裁剪网关前缀，原始 URL、调试与导出保持不变。
+
+### 优化
+
+- 类型筛选合并为「HTTP 服务器 / HTTP 客户端」页签，由 `SERVER / CLIENT` 枚举驱动；顶部仅保留模块与框架筛选。
+- 配对状态筛选统一使用「未配对接口」文案。
+
+### 修复
+
+- 修复新增或清空客户端公共路径前缀后 Feign 列表为空且不重新扫描的问题，现在会自动强制刷新。
+- 替换废弃的 `FileEditorManager.openFile(VirtualFile, boolean)` 调用，降低未来 IDE 版本的二进制与源码兼容风险。
+
 ## [1.2.4] - 2026-11-10
 
 ### 新增
@@ -57,7 +73,7 @@
 - **一键修复**：参数名不一致时提供 QuickFix，直接把 Feign 侧注解里的参数名同步为服务端期望的名字（仅改写注解属性，不动方法签名）。
 - **反向调用方查询**：Controller 方法右键 **`查看调用方`**，列出所有调用该接口的 Feign / HttpExchange 客户端（含模块、路径、HTTP 方法），双击跳转——IDE 原生 `Find Usages` 无法覆盖 HTTP 端点之间的调用关系。
 - **P0 规则集**：
-  - 客户端接口在工程内无任何 Controller 对端（孤儿接口）；
+  - 客户端接口在工程内无任何 Controller 对端（未配对接口）；
   - 两端 `@RequestParam` 显式名不一致（线上 400 的头号成因）；
   - URL 模板声明了路径变量但方法参数缺少对应 `@PathVariable`；
   - 两个 Controller 映射到相同路径与 HTTP 方法（Spring 启动即失败）。
@@ -94,7 +110,7 @@
 - **全局公共 Header 与多环境 Base URL 切换**：在 Settings → Tools → ApiHelper 及工具窗口独立标签页中支持配置全局公共请求头（如 `Authorization`、`X-Tenant-Id`）与多环境 Base URL（如 `Local`、`Dev`、`Test`），调试面板顶部支持一键切换环境。
 - **全场景一键复制为 cURL**：在端点列表右键菜单、编辑器 Controller Gutter 右键菜单与调试面板工具栏均支持一键导出包含 Path、Query、全局与接口级 Header、Cookie、Body 的标准 `curl` 命令；Controller Gutter 右键菜单同步支持直接“复制接口文档”。
 - **调试请求历史记录（History）与草稿记忆**：自动记录当前会话最近 30 条已发送的请求与响应快照，支持在“请求历史”标签页或调试栏弹窗中一键回放任意历史请求与响应结果；同时按端点记忆未发送的参数草稿，支持“重置”回源码初始参数。
-- **按模块分组视图与配对状态筛选**：工具栏新增“按模块分组”开关与“按配对状态筛选”（全部接口 / 仅显示已配对 / 仅显示未配对孤儿接口），并在已配对的端点树节点旁展示方向标记，方便快速排查失效的孤儿接口。
+- **按模块分组视图与配对状态筛选**：工具栏新增“按模块分组”开关与“按配对状态筛选”（全部接口 / 仅显示已配对 / 仅显示未配对接口），并在已配对的端点树节点旁展示方向标记，方便快速排查未配对接口。
 - **定位当前编辑器接口**：工具栏新增“定位当前编辑器接口”按钮，可根据当前打开源码的光标位置自动在 Controller 或 Feign 树中展开并选中对应接口节点。
 - **智能嵌套 JSON 生成与组合元注解识别**：支持递归展开嵌套 DTO 与集合（`List<T>`）生成结构化 JSON 请求体草稿，识别 `@JsonProperty` / `@SerializedName` / `@JSONField` 字段名以及 `@Schema(example)` / `@ApiModelProperty(example)` 示例值；同时支持识别一层自定义 Spring 组合元注解（如封装了 `@RestController` 与 `@RequestMapping` 的 `@ApiV1RestController`）。
 

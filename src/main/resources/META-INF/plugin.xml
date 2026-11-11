@@ -47,6 +47,13 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <h3>1.2.5</h3>
+        <ul>
+            <li>Added configurable client public path prefixes for gateway-to-service endpoint matching without changing original URLs.</li>
+            <li>Consolidated endpoint types into HTTP Server / HTTP Client tabs and kept Module / Framework filters.</li>
+            <li>Fixed endpoint refresh after adding or clearing client path prefixes.</li>
+            <li>Replaced the deprecated FileEditorManager.openFile(VirtualFile, boolean) API call.</li>
+        </ul>
         <h3>1.2.4</h3>
         <ul>
             <li>Open endpoints in IDEA HTTP Client with generated .http requests, including environment URLs, parameters, and JSON bodies.</li>
@@ -80,7 +87,7 @@
             <li>Editor inspection highlighting contract issues on both sides for Java and Kotlin, suppressible via <code>//noinspection ApiHelperContract</code>.</li>
             <li>Quick fix that synchronizes a Feign parameter name with the name the Controller expects.</li>
             <li><b>Show Callers</b> action on Controller methods, listing every Feign client that calls the endpoint.</li>
-            <li>P0 rules: orphan endpoints, explicit <code>@RequestParam</code> name mismatches, missing <code>@PathVariable</code> parameters, and duplicate path + HTTP method mappings.</li>
+            <li>P0 rules: unpaired endpoints, explicit <code>@RequestParam</code> name mismatches, missing <code>@PathVariable</code> parameters, and duplicate path + HTTP method mappings.</li>
         </ul>
         <h3>1.1.1</h3>
         <ul>
@@ -100,7 +107,7 @@
             <li>Added global common headers and multi-environment Base URL configuration under Settings → Tools → ApiHelper and dedicated tool window tabs, with an environment switcher in the API debugger.</li>
             <li>Added one-click <b>Copy as cURL</b> in the endpoint tree context menu, Controller editor gutter menu, and API debugger, plus <b>Copy API Docs</b> directly in the Controller gutter menu.</li>
             <li>Added project-level <b>Debug Draft Persistence &amp; Reset</b> per endpoint and <b>Debug Request History</b> (up to 30 recent requests with one-click replay of request and response).</li>
-            <li>Added <b>Group by Module</b> toggle, <b>Pairing Status Filter</b> (All / Paired Only / Unpaired Orphan Only), paired status indicators on tree nodes, and <b>Select Opened Endpoint</b> toolbar action.</li>
+            <li>Added <b>Group by Module</b> toggle, <b>Pairing Status Filter</b> (All / Paired Only / Unpaired Endpoints Only), paired status indicators on tree nodes, and <b>Select Opened Endpoint</b> toolbar action.</li>
             <li>Added recursive JSON request body generation for nested DTOs and collections, honoring <code>@JsonProperty</code> field names and <code>@Schema(example)</code> / <code>@ApiModelProperty(example)</code> values, plus custom composite meta-annotation (e.g. <code>@ApiRestController</code>) recognition.</li>
         </ul>
 
